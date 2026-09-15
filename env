@@ -1,0 +1,20 @@
+# HuggingFace Inference API Configuration
+HF_TOKEN=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
+HF_MODEL=microsoft/Phi-3-mini-4k-instruct
+HF_API_URL=https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct
+
+# FastAPI Configuration
+API_HOST=127.0.0.1
+API_PORT=8001
+
+# LLM Configuration
+USE_MOCK_LLM=False
+LLM_TIMEOUT=30
+
+# RAG Configuration
+RAG_THRESHOLD=0.40
+RAG_TOP_K=3
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+
+# Database (if needed later)
+DATABASE_URL=sqlite:///thesis_db.db

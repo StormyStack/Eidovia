@@ -1,0 +1,119 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv
+env/
+.env
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+thesis_db/
+postgres_data/
+
+# Logs
+*.log
+logs/
+*.txt.log
+
+# Data & models
+data/embeddings.json
+data/sessions.json
+data/pilot_study_analysis.json
+data/integration_test_results.json
+*.pkl
+*.joblib
+models/
+checkpoints/
+
+# MLflow
+mlruns/
+.mlflow/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+
+# Secrets & credentials
+.env
+.env.local
+secrets.json
+config_local.py
+credentials/
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+
+# Build artifacts
+build/
+dist/
+*.whl
+
+# Application
+*.pid
+.tmp/
+temp/
+
+# PostgreSQL dumps
+*.sql.gz
+*.dump
+
+# GPU/CUDA
+*.cu
+*.ptx
+
+# Node modules (if using Node)
+node_modules/
+
+# Ignore all outputs except results
+data/
+outputs/
+!.gitkeep
