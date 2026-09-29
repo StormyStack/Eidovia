@@ -1,24 +1,27 @@
 """
 Database Service Module
 Async SQLAlchemy connection pooling and session management.
+Provides async context manager for safe session handling.
 """
 
 import logging
+import contextlib
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import event, text  # ← Add "text" here
-from typing import Optional
+from sqlalchemy import event, text
+from typing import Optional, AsyncGenerator
 
 import config_prod as config
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# DATABASE SERVICE
+# DATABASE SERVICE WITH ASYNC CONTEXT MANAGER
 # ============================================================
 
 class DatabaseService:
     """
     Manages async PostgreSQL connections with pgvector support.
+    Provides async context manager for session lifecycle management.
     """
     
     def __init__(self):
@@ -81,11 +84,16 @@ class DatabaseService:
             self.connected = False
             logger.info("Database disconnected")
     
-    async def get_session(self) -> AsyncSession:
+    @contextlib.asynccontextmanager
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """
-        Get a new database session.
+        Get a new database session as async context manager.
         
-        Returns:
+        Usage:
+            async with db.get_session() as session:
+                result = await session.execute(query)
+        
+        Yields:
             AsyncSession for database operations
             
         Raises:
@@ -94,7 +102,16 @@ class DatabaseService:
         if not self.connected or not self.async_session_maker:
             raise RuntimeError("Database not connected. Call connect() first.")
         
-        return self.async_session_maker()
+        async with self.async_session_maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Session error: {e}")
+                raise
+            finally:
+                await session.close()
     
     @property
     def is_healthy(self) -> bool:

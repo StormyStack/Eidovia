@@ -75,8 +75,7 @@ EMBEDDING_DIMENSION = 384
 
 RAG_THRESHOLD = float(get_env("RAG_THRESHOLD", "0.40"))
 RAG_TOP_K = int(get_env("RAG_TOP_K", "3"))
-RAG_TIMEOUT = float(get_env("RAG_TIMEOUT", "1.5"))
-
+RAG_TIMEOUT = float(get_env("RAG_TIMEOUT", "5.0"))
 # ============================================================
 # BANDIT CONFIGURATION
 # ============================================================

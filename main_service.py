@@ -1,7 +1,13 @@
 """
-EduAR-AI Main Service
-FastAPI microservice with RAG + Contextual Bandit integration.
-Provides /chat (REST) and /ws/adapt/{session_id} (WebSocket) endpoints.
+EduAR-AI Main Service (Cache-First Architecture)
+FastAPI microservice with RAG + Contextual Bandit + Redis Cache
+Provides REST (/chat) and WebSocket (/ws/adapt/{session_id}) endpoints.
+
+Architecture:
+- Request → Redis Cache (check)
+- Miss → RAG Database Query (with pgvector)
+- Response → Store in Redis Cache
+- Return → Client
 """
 
 import logging
@@ -15,12 +21,14 @@ from fastapi import FastAPI, WebSocket, HTTPException, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import time
 
 import config_prod as config
 from database_service import db
 from rag_service import rag_service
 from bandit_service import bandit
 from scheduler_service import scheduler
+from cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="EduAR-AI Service",
-    description="Adaptive learning with RAG + contextual bandit",
+    description="Adaptive learning with RAG + Contextual Bandit + Redis Cache",
     version="1.0.0"
 )
 
@@ -63,6 +71,17 @@ class ChatResponse(BaseModel):
     num_documents: int
     latency_ms: float
     decision_id: Optional[str] = None
+    cached: bool = False  # ← NEW: indicates if from cache
+
+
+class CacheStatsResponse(BaseModel):
+    """Cache statistics response."""
+    hits: int
+    misses: int
+    errors: int
+    total: int
+    hit_rate: str
+    redis_status: str
 
 
 # ============================================================
@@ -73,10 +92,14 @@ class ChatResponse(BaseModel):
 async def startup():
     """Initialize services on startup."""
     logger.info("=" * 70)
-    logger.info("🚀 EduAR-AI SERVICE STARTUP")
+    logger.info("🚀 EduAR-AI SERVICE STARTUP (Cache-First)")
     logger.info("=" * 70)
     
     try:
+        # Connect to cache first (fastest, non-critical)
+        await cache_service.connect()
+        logger.info("✅ Redis cache connected")
+        
         # Connect to database
         await db.connect()
         logger.info("✅ Database connected")
@@ -86,7 +109,7 @@ async def startup():
         logger.info("✅ RAG service initialized")
         
         # Initialize scheduler
-        #await scheduler.initialize()
+        # await scheduler.initialize()
         logger.info("✅ Scheduler initialized")
         
         # Start background jobs
@@ -95,6 +118,7 @@ async def startup():
         
         logger.info("=" * 70)
         logger.info(f"API: http://{config.API_HOST}:{config.API_PORT}")
+        logger.info(f"Cache: Redis (default TTL: {rag_service.context_ttl}s)")
         logger.info("=" * 70)
         
     except Exception as e:
@@ -108,6 +132,7 @@ async def shutdown():
     logger.info("Shutting down services...")
     
     try:
+        await cache_service.close()  # ← NEW: close cache
         await scheduler.stop()
         await db.disconnect()
         logger.info("✅ Cleanup complete")
@@ -127,6 +152,7 @@ async def health_check():
         "service": "eduarai-ai",
         "version": "1.0.0",
         "database": "connected" if db.is_healthy else "disconnected",
+        "cache": "connected" if cache_service.client else "disconnected",
         "rag_ready": rag_service.model is not None,
         "scheduler_running": scheduler.running,
         "timestamp": datetime.utcnow().isoformat()
@@ -134,165 +160,281 @@ async def health_check():
 
 
 # ============================================================
-# CHAT ENDPOINT (REST)
+# CACHE STATISTICS ENDPOINT (NEW)
+# ============================================================
+
+@app.get("/api/cache-stats", response_model=CacheStatsResponse)
+async def get_cache_stats():
+    """
+    Get cache performance statistics.
+    
+    Returns:
+        Cache hit/miss rates and status
+    """
+    stats = cache_service.get_stats()
+    redis_status = "connected" if cache_service.client else "disconnected"
+    
+    return CacheStatsResponse(
+        hits=stats["hits"],
+        misses=stats["misses"],
+        errors=stats["errors"],
+        total=stats["total"],
+        hit_rate=stats["hit_rate"],
+        redis_status=redis_status
+    )
+
+
+@app.post("/api/cache-flush")
+async def flush_cache():
+    """
+    Flush all cache (use with caution!).
+    
+    Returns:
+        Confirmation message
+    """
+    success = await cache_service.flush()
+    return {
+        "success": success,
+        "message": "Cache flushed" if success else "Failed to flush cache"
+    }
+
+
+# ============================================================
+# CHAT ENDPOINT (REST) - CACHE-FIRST
 # ============================================================
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    Chat endpoint with RAG guardrail and decision logging.
+    Chat endpoint with Cache-First RAG guardrail.
+    
+    Request Flow:
+    1. Encode query to embedding
+    2. Check Redis cache
+    3. If miss, retrieve from DB + build context
+    4. Get bandit decision
+    5. Return response
     
     Args:
         request: Chat request with question
         
     Returns:
         ChatResponse with answer and metadata
-        
-    Raises:
-        HTTPException: If processing fails
     """
-    start_time = datetime.utcnow()
+    start_time = time.time()
+    session_id = request.session_id or str(uuid4())
+    user_id = request.user_id or "anonymous"
     
     try:
-        # Validate inputs
-        if not request.question or len(request.question) < 3:
-            raise HTTPException(
-                status_code=400,
-                detail="Question must be at least 3 characters"
+        async with db.get_session() as session:
+            
+            # ───────────────────────────────────────────────────────
+            # STEP 1: Encode query
+            # ───────────────────────────────────────────────────────
+            logger.info(f"Processing query: {request.question[:50]}...")
+            query_embedding = await rag_service.encode_query(request.question)
+            
+            
+            # ───────────────────────────────────────────────────────
+            # STEP 2: Build RAG context (cache-first)
+            # ───────────────────────────────────────────────────────
+            rag_result = await rag_service.build_context(
+                session=session,
+                query=request.question,
+                query_embedding=query_embedding,
+                use_cache=True  # ← Cache-first strategy
             )
-        
-        # Generate IDs if not provided
-        user_id = request.user_id or str(uuid4())
-        session_id = request.session_id or str(uuid4())
-        
-        # Encode query to embedding
-        logger.info(f"Processing: '{request.question[:50]}...'")
-        query_embedding = await rag_service.encode_query(request.question)
-        
-        # Get database session
-        async with await db.get_session() as session:
-            # Retrieve documents
-            rag_context = await rag_service.build_context(
-                session,
-                request.question,
-                query_embedding
+            
+            is_on_topic = rag_result["is_on_topic"]
+            max_similarity = rag_result["max_similarity"]
+            num_documents = rag_result["num_documents"]
+            context = rag_result["context"]
+            
+            
+            # ───────────────────────────────────────────────────────
+            # STEP 3: Generate answer
+            # ───────────────────────────────────────────────────────
+            if is_on_topic and context:
+                answer = (
+                    f"Based on the curriculum:\n\n{context}\n\n"
+                    f"Your query appears to be on-topic "
+                    f"(similarity: {max_similarity:.2f})"
+                )
+            else:
+                answer = (
+                    f"I appreciate your question, but it appears to be "
+                    f"outside the scope of the current curriculum. "
+                    f"Please ask questions related to DNA and cell biology."
+                )
+            
+            
+            # ───────────────────────────────────────────────────────
+            # STEP 4: Get bandit decision (adaptive action)
+            # ───────────────────────────────────────────────────────
+            decision_id = None
+            try:
+                state_vector = np.array([
+                    1.0 if is_on_topic else 0.0,  # on-topic indicator
+                    min(max_similarity, 1.0),     # relevance
+                    num_documents / 10.0,         # num docs (normalized)
+                    0.5,  # placeholder: correct_answer_rate
+                    0.5,  # placeholder: hints_per_session
+                    0.5,  # placeholder: difficulty
+                    0.5,  # placeholder: engagement_rate
+                    0.5,  # placeholder: content_skip_rate
+                ])
+                
+                action = bandit.select_action(state_vector)
+                decision_id = str(uuid4())
+                
+                logger.info(f"Bandit action: {action} (decision_id: {decision_id})")
+            except Exception as e:
+                logger.warning(f"Bandit decision failed: {e}")
+            
+            
+            # ───────────────────────────────────────────────────────
+            # STEP 5: Calculate latency
+            # ───────────────────────────────────────────────────────
+            latency_ms = (time.time() - start_time) * 1000
+            cached = rag_result.get("cached", False)
+            
+            logger.info(
+                f"✅ Response complete "
+                f"(latency: {latency_ms:.1f}ms, cached: {cached})"
             )
-        
-        # Generate response
-        if rag_context["is_on_topic"]:
-            answer = (
-                f"Based on our curriculum materials:\n\n"
-                f"{rag_context['context']}\n\n"
-                f"This is a great question about {request.module_id or 'the topic'}!"
+            
+            return ChatResponse(
+                answer=answer,
+                is_on_topic=is_on_topic,
+                max_similarity=max_similarity,
+                num_documents=num_documents,
+                latency_ms=latency_ms,
+                decision_id=decision_id,
+                cached=cached
             )
-        else:
-            answer = (
-                "I appreciate your question, but it's outside the scope of our "
-                "current curriculum. Let's focus on the biology content."
-            )
-        
-        # Calculate latency
-        latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-        
-        logger.info(
-            f"Chat response: on_topic={rag_context['is_on_topic']}, "
-            f"similarity={rag_context['max_similarity']:.3f}, "
-            f"latency={latency_ms:.1f}ms"
-        )
-        
-        return ChatResponse(
-            answer=answer,
-            is_on_topic=rag_context["is_on_topic"],
-            max_similarity=rag_context["max_similarity"],
-            num_documents=rag_context["num_documents"],
-            latency_ms=latency_ms,
-            decision_id=None
-        )
-        
-    except HTTPException:
-        raise
+    
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Chat request failed: {e}")
+        latency_ms = (time.time() - start_time) * 1000
+        
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "latency_ms": latency_ms
+            }
+        )
 
 
 # ============================================================
-# WEBSOCKET ADAPTATION
+# WEBSOCKET ENDPOINT (ADAPTIVE)
 # ============================================================
 
 @app.websocket("/ws/adapt/{session_id}")
 async def websocket_adapt(websocket: WebSocket, session_id: str):
     """
-    WebSocket adaptation endpoint for real-time learning.
-    Receives interaction events and sends contextual adaptations.
+    WebSocket endpoint for real-time adaptive learning.
+    
+    Protocol:
+    - Client sends: {"question": "...", "action_feedback": {...}}
+    - Server responds: {"answer": "...", "action": "increase_difficulty", ...}
+    - SLA: <150ms per message
     
     Args:
         websocket: WebSocket connection
         session_id: User session ID
     """
     await websocket.accept()
-    logger.info(f"✅ WebSocket connected: {session_id}")
+    logger.info(f"WebSocket connected: {session_id}")
     
     try:
         while True:
-            # Receive interaction event
+            # Receive message
             data = await asyncio.wait_for(
-                websocket.receive_text(),
-                timeout=config.WS_TIMEOUT
+                websocket.receive_json(),
+                timeout=30.0
             )
             
-            event = json.loads(data)
+            question = data.get("question", "")
             
-            # Extract event fields
-            question = event.get("question", "")
-            correct = bool(event.get("correct", False))
-            response_time_ms = float(event.get("response_time_ms", 3000))
-            difficulty = int(event.get("difficulty", 1))
+            if not question:
+                await websocket.send_json({
+                    "error": "No question provided",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                continue
             
-            # Build state vector (8D)
-            state_vector = np.array([
-                1.0 if correct else 0.0,           # correctness
-                min(response_time_ms / 5000, 1.0), # response_time_norm
-                float(difficulty) / 3.0,           # difficulty_level
-                0.5,                               # topic_match
-                0.7,                               # engagement
-                0.1,                               # question_count_norm
-                0.0 if correct else 1.0,           # error_rate
-                min(response_time_ms / 10000, 1.0) # time_spent_norm
-            ], dtype=np.float32)
+            start_time = time.time()
             
-            # Get bandit recommendation
-            action_id, action_name = bandit.recommend_action_by_state(state_vector)
+            try:
+                async with db.get_session() as session:
+                    # Encode + retrieve (with cache)
+                    query_embedding = await rag_service.encode_query(question)
+                    rag_result = await rag_service.build_context(
+                        session=session,
+                        query=question,
+                        query_embedding=query_embedding,
+                        use_cache=True
+                    )
+                    
+                    # Bandit decision
+                    state_vector = np.random.rand(8)
+                    action = bandit.select_action(state_vector)
+                    
+                    latency_ms = (time.time() - start_time) * 1000
+                    
+                    # Send response
+                    await websocket.send_json({
+                        "answer": rag_result["context"][:200] + "...",
+                        "is_on_topic": rag_result["is_on_topic"],
+                        "action": action,
+                        "latency_ms": latency_ms,
+                        "cached": rag_result.get("cached", False),
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                    
+                    logger.info(
+                        f"WS Response: {session_id} "
+                        f"(latency: {latency_ms:.1f}ms, action: {action})"
+                    )
             
-            # Update bandit with reward
-            reward = 1.0 if correct else 0.0
-            await bandit.update(action_id, reward)
-            
-            # Send adaptation response
-            response = {
-                "action_id": int(action_id),
-                "action_name": action_name,
-                "reward": float(reward),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            await websocket.send_json(response)
-            
-            logger.debug(
-                f"Adaptation: action={action_name}, correct={correct}, "
-                f"reward={reward:.2f}"
-            )
-            
+            except Exception as e:
+                logger.error(f"WS processing failed: {e}")
+                await websocket.send_json({
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+    
     except asyncio.TimeoutError:
-        logger.warning(f"WebSocket timeout: {session_id}")
+        logger.warning(f"WS timeout: {session_id}")
+        await websocket.close(code=1008)
     except WebSocketDisconnect:
-        logger.info(f"❌ WebSocket disconnected: {session_id}")
+        logger.info(f"WS disconnected: {session_id}")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        try:
-            await websocket.close(code=1011, reason=str(e))
-        except:
-            pass
+        logger.error(f"WS error: {e}")
+        await websocket.close(code=1011)
+
+
+# ============================================================
+# ROOT ENDPOINT
+# ============================================================
+
+@app.get("/")
+async def root():
+    """Root endpoint with service info."""
+    return {
+        "service": "EduAR-AI",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "chat": "/api/chat (POST)",
+            "websocket": "/ws/adapt/{session_id} (WebSocket)",
+            "cache_stats": "/api/cache-stats (GET)",
+            "cache_flush": "/api/cache-flush (POST)"
+        },
+        "architecture": "Cache-First RAG with Redis + PostgreSQL + pgvector",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 # ============================================================
@@ -300,12 +442,9 @@ async def websocket_adapt(websocket: WebSocket, session_id: str):
 # ============================================================
 
 if __name__ == "__main__":
-    config.validate_config()
-    
     uvicorn.run(
         app,
         host=config.API_HOST,
         port=config.API_PORT,
-        log_level="info",
-        access_log=True
+        workers=4
     )

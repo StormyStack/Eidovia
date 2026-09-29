@@ -1,30 +1,42 @@
 """
-RAG Service Module
-Handles document retrieval with cosine similarity guardrail.
+RAG Service Module (Cache-First Strategy with Fixed pgvector Query)
+Handles document retrieval with Redis caching layer.
 Uses pgvector for efficient nearest-neighbor search.
+
+Request Flow:
+1. Check Redis cache (fast, <10ms)
+2. If miss, query PostgreSQL (slower, <100ms)
+3. Store result in Redis
+4. Return to client
 """
 
 import logging
 import asyncio
+import json
 import numpy as np
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import text
 from sentence_transformers import SentenceTransformer
 
 import config_prod as config
+from cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# RAG SERVICE
+# RAG SERVICE WITH REDIS CACHING & FIXED PGVECTOR QUERY
 # ============================================================
 
 class RAGService:
     """
-    Retrieval-Augmented Generation Service
-    Handles document embedding, retrieval, and guardrail filtering.
+    Retrieval-Augmented Generation Service with Cache-First Strategy
+    
+    Caching Strategy:
+    - Query Embeddings: Cached for 1 hour
+    - Retrieved Documents: Cached for 1 hour
+    - Context: Cached per query for 30 minutes
     """
     
     def __init__(self):
@@ -34,13 +46,15 @@ class RAGService:
         self.top_k = config.RAG_TOP_K
         self.timeout = config.RAG_TIMEOUT
         
+        # Cache TTLs
+        self.embedding_ttl = 3600  # 1 hour
+        self.doc_ttl = 3600  # 1 hour
+        self.context_ttl = 1800  # 30 minutes
+        
     async def initialize(self) -> None:
         """
         Load embedding model asynchronously.
         Must be called before any retrieval operations.
-        
-        Raises:
-            RuntimeError: If model fails to load
         """
         try:
             loop = asyncio.get_event_loop()
@@ -54,29 +68,52 @@ class RAGService:
             logger.error(f"❌ Failed to load embedding model: {e}")
             raise RuntimeError(f"Embedding model initialization failed: {e}")
     
-    async def encode_query(self, text: str) -> np.ndarray:
+    async def encode_query(self, text: str, use_cache: bool = True) -> np.ndarray:
         """
-        Encode query text to embedding vector.
+        Encode query text to embedding vector (with cache).
+        
+        Cache Strategy:
+        - Check Redis for cached embedding
+        - If miss, compute and store
+        - TTL: 1 hour
         
         Args:
             text: Query text to encode
+            use_cache: Whether to use cache (default: True)
             
         Returns:
             384-dimensional embedding vector
-            
-        Raises:
-            ValueError: If model not initialized or encoding fails
         """
         if self.model is None:
             raise ValueError("RAG service not initialized. Call initialize() first.")
         
+        # Try cache first
+        cache_key = cache_service._make_key("embedding", text)
+        if use_cache:
+            cached = await cache_service.get(cache_key)
+            if cached and "embedding" in cached:
+                logger.info(f"📦 Using cached embedding for query")
+                return np.array(cached["embedding"], dtype=np.float32)
+        
+        # Compute if not in cache
         try:
             loop = asyncio.get_event_loop()
             embedding = await asyncio.wait_for(
                 loop.run_in_executor(None, self.model.encode, text),
                 timeout=self.timeout
             )
-            return np.array(embedding, dtype=np.float32)
+            
+            embedding_array = np.array(embedding, dtype=np.float32)
+            
+            # Store in cache
+            await cache_service.set(
+                cache_key,
+                {"embedding": embedding_array.tolist()},
+                ttl=self.embedding_ttl
+            )
+            
+            return embedding_array
+            
         except asyncio.TimeoutError:
             logger.error(f"Encoding timeout for query: {text[:50]}...")
             raise ValueError("Query encoding timeout")
@@ -84,73 +121,75 @@ class RAGService:
             logger.error(f"Query encoding failed: {e}")
             raise ValueError(f"Query encoding error: {e}")
     
-    def cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
-        """
-        Compute cosine similarity between two vectors.
-        
-        Args:
-            vec1: First vector
-            vec2: Second vector
-            
-        Returns:
-            Cosine similarity score in [0, 1]
-        """
-        norm1 = np.linalg.norm(vec1)
-        norm2 = np.linalg.norm(vec2)
-        
-        if norm1 < 1e-10 or norm2 < 1e-10:
-            return 0.0
-        
-        similarity = np.dot(vec1, vec2) / (norm1 * norm2)
-        return float(np.clip(similarity, 0.0, 1.0))
-    
     async def retrieve_documents(
         self,
         session: AsyncSession,
         query_embedding: np.ndarray,
         module_id: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        use_cache: bool = True
     ) -> list[dict]:
         """
-        Retrieve top-k documents by cosine similarity (using pgvector).
+        Retrieve top-k documents (with cache fallback).
+        
+        Cache Strategy:
+        1. Check Redis for cached results
+        2. If miss, query PostgreSQL with pgvector
+        3. Store results in Redis
+        4. Return documents
         
         Args:
             session: Database session
-            query_embedding: Query embedding vector
+            query_embedding: Query embedding vector (384-dim numpy array)
             module_id: Optional filter by module
             limit: Override default top_k
+            use_cache: Whether to use cache (default: True)
             
         Returns:
-            List of documents with similarity scores, empty if all below threshold
-            
-        Raises:
-            Exception: If database query fails
+            List of documents with similarity scores
         """
-        from sqlalchemy import func, text
+        # Create cache key from embedding hash
+        embedding_hash = str(hash(query_embedding.tobytes()))
+        cache_key = cache_service._make_key(
+            f"docs:{module_id or 'all'}",
+            embedding_hash
+        )
         
+        # Try cache first
+        if use_cache:
+            cached = await cache_service.get(cache_key)
+            if cached and "documents" in cached:
+                logger.info(f"📦 Using cached documents")
+                return cached["documents"]
+        
+        # Query database if not in cache
         try:
             k = limit or self.top_k
             
-            # Use pgvector's <=> operator for cosine distance (ascending)
-            query_str = """
+            # Convert embedding to string format for SQL
+            # pgvector accepts: '[0.1, 0.2, 0.3, ...]'
+            embedding_list = query_embedding.tolist()
+            embedding_str = str(embedding_list)
+            
+            # pgvector cosine distance: <=> operator
+            # 1 - distance = similarity (0-1 scale)
+            query_sql = f"""
                 SELECT 
                     chunk_id, 
                     module_id, 
                     content,
-                    1 - (embedding <=> :query_vec::vector) AS similarity
+                    1 - (embedding <=> '{embedding_str}'::vector) AS similarity
                 FROM document_chunks
             """
             
-            params = {"query_vec": query_embedding.tobytes().hex()}
-            
             if module_id:
-                query_str += " WHERE module_id = :module_id"
-                params["module_id"] = module_id
+                query_sql += f" WHERE module_id = '{module_id}'"
             
-            query_str += " ORDER BY similarity DESC LIMIT :limit"
-            params["limit"] = k
+            query_sql += f" ORDER BY similarity DESC LIMIT {k}"
             
-            result = await session.execute(text(query_str), params)
+            logger.debug(f"Executing query: {query_sql[:100]}...")
+            
+            result = await session.execute(text(query_sql))
             rows = result.fetchall()
             
             documents = []
@@ -165,21 +204,24 @@ class RAGService:
                         "content": content,
                         "similarity": float(similarity)
                     })
-                else:
-                    logger.debug(
-                        f"Document below threshold: similarity={similarity:.3f}, "
-                        f"threshold={self.threshold}"
-                    )
             
             logger.info(
                 f"Retrieved {len(documents)}/{k} documents "
-                f"(threshold={self.threshold}, max_similarity={max([d['similarity'] for d in documents] or [0.0]):.3f})"
+                f"(max_similarity={max([d['similarity'] for d in documents] or [0.0]):.3f})"
+            )
+            
+            # Cache results
+            await cache_service.set(
+                cache_key,
+                {"documents": documents},
+                ttl=self.doc_ttl
             )
             
             return documents
             
         except Exception as e:
             logger.error(f"Document retrieval failed: {e}")
+            logger.error(f"Query was: {query_sql if 'query_sql' in locals() else 'N/A'}")
             raise
     
     async def is_on_topic(
@@ -188,14 +230,14 @@ class RAGService:
         max_similarity: float
     ) -> bool:
         """
-        Determine if query is on-topic based on max similarity to known documents.
+        Determine if query is on-topic based on similarity threshold.
         
         Args:
             query_embedding: Query embedding
             max_similarity: Maximum similarity score from retrieval
             
         Returns:
-            True if on-topic (above threshold), False otherwise
+            True if on-topic, False otherwise
         """
         is_topic = max_similarity >= self.threshold
         logger.debug(f"On-topic check: {is_topic} (similarity={max_similarity:.3f})")
@@ -205,32 +247,40 @@ class RAGService:
         self,
         session: AsyncSession,
         query: str,
-        query_embedding: np.ndarray
+        query_embedding: np.ndarray,
+        use_cache: bool = True
     ) -> dict:
         """
-        Build complete RAG context for a query.
+        Build complete RAG context (with cache).
+        
+        Cache Strategy:
+        1. Check Redis for full context
+        2. If miss, retrieve documents + build context
+        3. Cache complete context
         
         Args:
             session: Database session
             query: User query text
             query_embedding: Query embedding
+            use_cache: Whether to use cache (default: True)
             
         Returns:
             Dictionary with context, on-topic status, and metadata
-            
-        Example:
-            {
-                "is_on_topic": True,
-                "max_similarity": 0.78,
-                "documents": [...],
-                "context": "Document chunk text...",
-                "error": None
-            }
         """
+        # Try cache first
+        cache_key = cache_service._make_key("context", query)
+        if use_cache:
+            cached = await cache_service.get(cache_key)
+            if cached:
+                logger.info(f"📦 Using cached context")
+                return cached
+        
         try:
+            # Retrieve documents
             documents = await self.retrieve_documents(
                 session,
-                query_embedding
+                query_embedding,
+                use_cache=use_cache
             )
             
             max_similarity = max(
@@ -240,7 +290,7 @@ class RAGService:
             
             is_topic = await self.is_on_topic(query_embedding, max_similarity)
             
-            # Build context string from retrieved documents
+            # Build context string
             context_parts = []
             for doc in documents:
                 context_parts.append(
@@ -249,15 +299,25 @@ class RAGService:
             
             context = "\n\n".join(context_parts) if context_parts else ""
             
-            return {
+            result = {
                 "is_on_topic": is_topic,
                 "max_similarity": max_similarity,
                 "num_documents": len(documents),
                 "documents": documents,
                 "context": context,
                 "error": None,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
+                "cached": False
             }
+            
+            # Cache context
+            await cache_service.set(
+                cache_key,
+                result,
+                ttl=self.context_ttl
+            )
+            
+            return result
             
         except Exception as e:
             logger.error(f"Context building failed: {e}")
@@ -268,7 +328,8 @@ class RAGService:
                 "documents": [],
                 "context": "",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
+                "cached": False
             }
 
 
