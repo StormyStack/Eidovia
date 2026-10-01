@@ -29,6 +29,7 @@ from rag_service import rag_service
 from bandit_service import bandit
 from scheduler_service import scheduler
 from cache_service import cache_service
+from event_service import event_service, EventRequest
 
 logger = logging.getLogger(__name__)
 
@@ -414,7 +415,36 @@ async def websocket_adapt(websocket: WebSocket, session_id: str):
         logger.error(f"WS error: {e}")
         await websocket.close(code=1011)
 
+# ============================================================
+# EVENT LOGGING ENDPOINT
+# ============================================================
 
+@app.post("/api/events", response_model=dict)
+async def log_event(event: EventRequest):
+    """
+    Log learner interaction event.
+    
+    Event types:
+    - quiz_answer: {"correct": bool, "time_spent_ms": int}
+    - ar_interaction: {"object_id": str, "time_spent_ms": int}
+    - hint_requested: {"hint_type": str}
+    - content_skip: {"content_id": str}
+    - content_viewed: {"content_id": str, "duration_ms": int}
+    """
+    try:
+        async with db.get_session() as session:
+            event_id = await event_service.log_event(session, event)
+            
+            return {
+                "status": "logged",
+                "event_id": event_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+    
+    except Exception as e:
+        logger.error(f"❌ Event logging failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
 # ============================================================
 # ROOT ENDPOINT
 # ============================================================
