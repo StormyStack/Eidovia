@@ -8,15 +8,13 @@ so the whole team can share one set of database credentials.
 """
 
 import os
-import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-
-logger = logging.getLogger(__name__)
+from urllib.parse import quote_plus
 
 GATEWAY_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ENV_FILE = GATEWAY_ROOT / ".env"
@@ -68,8 +66,10 @@ class Settings:
 
     @property
     def database_url(self) -> str:
+        escaped_user = quote_plus(self.database_user)
+        escaped_pw = quote_plus(self.database_password)
         return (
-            f"postgresql+asyncpg://{self.database_user}:{self.database_password}"
+            f"postgresql+asyncpg://{escaped_user}:{escaped_pw}"
             f"@{self.database_host}:{self.database_port}/{self.database_name}"
         )
 

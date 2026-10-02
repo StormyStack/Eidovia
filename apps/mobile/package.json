@@ -10,7 +10,6 @@
     "axios": "^1.20.0",
     "expo": "~57.0.26",
     "expo-asset": "~57.0.18",
-    "expo-dev-client": "~57.0.19",
     "expo-font": "~57.0.4",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
@@ -39,7 +38,7 @@
     "ios": "expo start --ios",
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
-    "doctor": "expo-doctor",
+    "doctor": "npx expo-doctor",
     "test": "jest"
   },
   "private": true,

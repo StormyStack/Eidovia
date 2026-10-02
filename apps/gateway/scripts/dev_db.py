@@ -25,7 +25,6 @@ import os
 import secrets
 import shutil
 import sys
-from pathlib import Path
 
 from scripts import local_pg
 
