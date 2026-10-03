@@ -4,19 +4,21 @@ services:
     container_name: eduarai_postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgresadmin}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      - POSTGRES_DB=${POSTGRES_DB:-eduarai}
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-eduarai}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgresadmin} -d ${POSTGRES_DB:-eduarai}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eduarai}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - eduarai_network
 
   redis:
     image: redis:7-alpine
@@ -35,7 +37,34 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - eduarai_network
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eduarai_ai
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eduarai_network
 
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  eduarai_network:
+    driver: bridge

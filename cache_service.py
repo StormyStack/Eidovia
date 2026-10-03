@@ -10,6 +10,7 @@ from typing import Optional, Any, Dict
 import redis.asyncio as redis
 from datetime import timedelta
 import hashlib
+import config_prod as config
 
 logger = logging.getLogger(__name__)
 
@@ -187,4 +188,4 @@ class CacheService:
         }
 
 # Global cache service instance
-cache_service = CacheService(__name__)
+cache_service = CacheService(config.REDIS_URL)

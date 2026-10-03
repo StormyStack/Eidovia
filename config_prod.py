@@ -7,6 +7,9 @@ import os
 import logging
 from typing import Optional
 from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,10 @@ DATABASE_USER = get_env("POSTGRES_USER", "appuser")
 DATABASE_PASSWORD = get_env("DB_PASSWORD", required=True)
 DATABASE_NAME = get_env("POSTGRES_DB", "eduarai")
 
-DATABASE_URL = f"postgresql+asyncpg://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
+import urllib.parse
+
+_db_password_quoted = urllib.parse.quote_plus(DATABASE_PASSWORD)
+DATABASE_URL = f"postgresql+asyncpg://{DATABASE_USER}:{_db_password_quoted}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
 
 DB_POOL_SIZE = int(get_env("DB_POOL_SIZE", "10"))
 DB_MAX_OVERFLOW = int(get_env("DB_MAX_OVERFLOW", "20"))
@@ -58,7 +64,8 @@ REDIS_PORT = get_env("REDIS_PORT", "6379")
 REDIS_PASSWORD = get_env("REDIS_PASSWORD", required=True)
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 
-REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}"
+_redis_password_quoted = urllib.parse.quote_plus(REDIS_PASSWORD)
+REDIS_URL = f"redis://:{_redis_password_quoted}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 REDIS_SESSION_STATE_PREFIX = "session"
 REDIS_USER_PROFILE_PREFIX = "user"

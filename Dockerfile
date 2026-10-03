@@ -1,63 +1,56 @@
-# Multi-stage build for optimized image size
-FROM python:3.11-slim as builder
+# ============================================================
+# Stage 1: Build & Dependencies
+# ============================================================
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies for building wheels
+# Install build tools for compiling any C extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Upgrade pip/setuptools/wheel in-place (no --prefix!)
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install all packages from requirements.txt into isolated location
 COPY requirements.txt .
-
-# Build wheels (faster installation in final stage)
-RUN pip install --user --no-cache-dir wheel && \
-    pip install --user --no-cache-dir -r requirements.txt
+RUN python -m pip install \
+        --prefix=/install \
+        --no-cache-dir \
+        --timeout 1200 \
+        --retries 10 \
+        -r requirements.txt
 
 # ============================================================
-# Final stage
+# Stage 2: Final Minimal Runtime
 # ============================================================
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install curl for health check
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-
-# Set PATH
-ENV PATH=/root/.local/bin:$PATH
+# Copy installed Python packages directly from builder
+COPY --from=builder /install /usr/local
 
 # Copy application code
-COPY config_prod.py .
-COPY database_service.py .
-COPY rag_service.py .
-COPY bandit_service.py .
-COPY scheduler_service.py .
-COPY main_service.py .
-COPY cache_service.py .
+COPY . .
 
-# Environment variables (can be overridden)
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV DEBUG=False
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/usr/local/bin:$PATH"
 
 # Expose port
 EXPOSE 8001
 
-# Run application
-CMD ["python", "-m", "uvicorn", "main_service:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8001", \
-     "--workers", "4", \
-     "--log-level", "info"]
+# Health check
+HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Run the exact same command used locally
+CMD ["python", "-m", "uvicorn", "main_service:app", "--host", "0.0.0.0", "--port", "8001"]
