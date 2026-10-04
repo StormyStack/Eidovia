@@ -1,2104 +1,462 @@
-# 📊 EduAR-AI "Comprehensive Technical Report"
+# EduAR-AI: AI Microservice
 
-**Project:** EduAR-AI - Adaptive Learning Microservice  
-**Status:** ✅ **PRODUCTION READY**  
-**Date:** September 18-19, 2026  
-**Version:** 1.0.0  
+Grounded tutoring and real-time adaptation for an AR biology learning app (DNA and cell biology).
 
----
+**Role:** AI Engineer (Shabab) | **Repo:** `StormyStack/Thesis` | **Branch:** `AI_Code_Works`
+**Stack:** Python 3.11, FastAPI, PostgreSQL 16 + pgvector, Redis 7, Docker
+**Status:** thesis prototype. Retrieval works end to end; cache, ETL and the WebSocket loop are not finished (see [Current status](#current-status)).
+**Last updated:** 4 October 2026
 
-## 📑 Table of Contents
-
-1. [Executive Summary](#executive-summary)
-2. [Project Overview](#project-overview)
-3. [Architecture & Design](#architecture--design)
-4. [Deliverables](#deliverables)
-5. [Technical Implementation](#technical-implementation)
-6. [Deployment Setup](#deployment-setup)
-7. [API Documentation](#api-documentation)
-8. [Docker Configuration](#docker-configuration)
-9. [Git Workflow & Collaboration](#git-workflow--collaboration)
-10. [Testing & Verification](#testing--verification)
-11. [Performance Targets](#performance-targets)
-12. [Troubleshooting Guide](#troubleshooting-guide)
-13. [Quick Reference](#quick-reference)
-14. [Next Steps](#next-steps)
+> Documentation history: [`final.md`](final.md) is the consolidated Week 4 report. It was written before the Week 5 work and contains targets and numbers that were never measured (for example a 45 ms retrieval time, a 450 MB image and "production ready"). **Where `final.md` and this README disagree, this README is correct.**
 
 ---
 
-## Executive Summary
+## Contents
 
-### 🎯 Objectives Completed
-
-Week 5 of the EduAR-AI thesis project focused on developing and containerizing the AI microservice that forms the core of the adaptive learning system. All objectives have been successfully met and exceeded.
-
-**Key Achievements:**
-- ✅ **6 core service modules** implemented with zero garbage code
-- ✅ **100% type hints** and comprehensive docstrings
-- ✅ **Docker Compose integration** ready for production deployment
-- ✅ **Complete documentation** (5 guides + API reference)
-- ✅ **Testing suite** with integration tests and examples
-- ✅ **Deployment automation** with startup scripts
-- ✅ **Git workflow framework** for team collaboration
-
-### 📊 Statistics
-
-| Metric | Value |
-|--------|-------|
-| **Python Code** | ~1,200 lines (0 garbage) |
-| **Type Hints** | 100% complete |
-| **Documentation** | 38.7 KB (5 guides) |
-| **Files Created** | 21 total |
-| **Core Services** | 6 modules |
-| **Test Coverage** | Integration + examples |
-| **Build Time** | <30 seconds |
-| **Startup Time** | <10 seconds |
-| **Container Size** | ~450 MB |
+1. [What this is](#what-this-is)
+2. [Current status](#current-status)
+3. [Architecture](#architecture)
+4. [Repository layout](#repository-layout)
+5. [Tech stack](#tech-stack)
+6. [Quick start (Windows / PowerShell)](#quick-start-windows--powershell)
+7. [Configuration](#configuration)
+8. [API reference](#api-reference)
+9. [How it works](#how-it-works)
+10. [Database schema](#database-schema)
+11. [Docker notes](#docker-notes)
+12. [Verified results](#verified-results)
+13. [Known issues](#known-issues)
+14. [Troubleshooting](#troubleshooting)
+15. [Roadmap](#roadmap)
+16. [Git workflow](#git-workflow)
+17. [Team and references](#team-and-references)
 
 ---
 
-## Project Overview
+## What this is
 
-### 🎓 Context
+EduAR-AI is an augmented-reality learning app. This repository holds the **AI microservice** (internal service on port 8001). It does two jobs:
 
-The EduAR-AI system is a thesis project creating an adaptive learning platform for biology education using Augmented Reality. The system combines:
+1. **Tutoring with a guardrail.** A student question is embedded, matched against the curriculum stored in PostgreSQL with pgvector, and answered only from retrieved curriculum text. Questions that are not similar enough to the curriculum (cosine similarity below 0.40) are treated as off-topic.
+2. **Real-time adaptation.** A contextual bandit chooses one of 8 pedagogical actions (show a hint, change difficulty, suggest a quiz, and so on) from an 8-dimensional learner state.
 
-- **Personalization** via contextual bandit (8-action policy)
-- **Knowledge** via Retrieval-Augmented Generation (RAG)
-- **AR Integration** for immersive learning
-- **Real-time Adaptation** using WebSockets
+Redis is meant to sit in front of PostgreSQL as a cache (cache first, database on a miss).
 
-### 🏗️ Team Structure
+The Gateway (port 8000), PostgreSQL/Redis setup and schema are owned by the System Engineer. The AR scenes (Unity) and the mobile app (React Native) are owned by two other team members. Clients reach this service through the Gateway.
 
-| Role | Responsibility |
-|------|-----------------|
-| **AI Engineer** (You) | Core services, RAG, bandit algorithms |
-| **Software Engineer (SE)** | Infrastructure (PostgreSQL, Redis, docker-compose) |
-| **Architecture** | CTO oversight and specification |
+## Current status
 
-### 🔗 Integration Points
+| Area | Status | Notes |
+|---|---|---|
+| Docker stack (PostgreSQL + pgvector, Redis) | Working | SE's `docker-compose.yml`, both containers healthy |
+| Curriculum in pgvector | Working | 18 chunks, 384-dim embeddings, module `DNA_BIOLOGY_001` |
+| RAG retrieval and guardrail | Working | Live test: 3 documents, similarity 0.567, on-topic |
+| `GET /health`, `POST /api/chat` | Working | Verified live |
+| Async database sessions | Working | `get_session()` is an async context manager |
+| Redis cache layer | **Coded, not connecting** | Wrong URL passed to the cache client; fix in [Known issues](#known-issues) |
+| WebSocket `/ws/adapt/{session_id}` | **Prototype, not tested** | Uses a random state vector; frame format differs from the spec |
+| Contextual bandit | Epsilon-greedy baseline | Per-action mean reward; the state vector is validated but not used in the score |
+| Scheduler / ETL | **Disabled** | Start calls are commented out in `main_service.py` |
+| Event logging (A.3) | **Drafted, not run** | `events` table exists in SE's schema; `event_service.py` needs changes |
+| Answer generation | Template only | `MOCK_LLM=True`: the reply is the retrieved text, no language model |
+| Automated tests | Not run in Week 5 | `test_integration.py` exists from Week 4 |
+| Latency / memory SLAs | Not measured | One live request measured: about 570 ms (cache miss) |
 
-- **Data Layer** (SE's responsibility): PostgreSQL 16 + pgvector, Redis 7
-- **AI Service** (Your responsibility): FastAPI, RAG, bandit, ETL scheduler
-- **Gateway** (Future): Authentication, rate limiting, HTTPS
+## Architecture
 
----
-
-## Architecture & Design
-
-### 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  End User (Browser/Mobile)                   │
-└─────────────────────┬───────────────────────────────────────┘
-                      │ HTTP/WebSocket
-                      ↓
-┌─────────────────────────────────────────────────────────────┐
-│                   API Gateway (Future)                        │
-│              (Auth, Rate Limiting, HTTPS)                     │
-└─────────────────────┬───────────────────────────────────────┘
-                      │ HTTP/WebSocket
-                      ↓
-┌─────────────────────────────────────────────────────────────┐
-│              FastAPI Microservice (Your Service)              │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Main Service (main_service.py)                      │  │
-│  │  • POST /api/chat (REST)                             │  │
-│  │  • GET /health (Health checks)                       │  │
-│  │  • WS /ws/adapt/{session_id} (WebSocket)             │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Core Services (Pluggable Modules)                   │  │
-│  │                                                      │  │
-│  │  ┌────────────────┐  ┌────────────────┐            │  │
-│  │  │ RAG Service    │  │ Bandit Service │            │  │
-│  │  │ • Embedding    │  │ • Thompson     │            │  │
-│  │  │ • pgvector     │  │ • State/Action │            │  │
-│  │  │ • Similarity   │  │ • Reward       │            │  │
-│  │  │ • Guardrail    │  │ • Policy       │            │  │
-│  │  └────────────────┘  └────────────────┘            │  │
-│  │                                                      │  │
-│  │  ┌────────────────┐  ┌────────────────┐            │  │
-│  │  │ Database       │  │ Scheduler      │            │  │
-│  │  │ Service        │  │ Service        │            │  │
-│  │  │ • Async Pool   │  │ • ETL Refresh  │            │  │
-│  │  │ • Connections  │  │ • State Update │            │  │
-│  │  │ • Queries      │  │ • Distributed  │            │  │
-│  │  │ • Transactions │  │ • Locks        │            │  │
-│  │  └────────────────┘  └────────────────┘            │  │
-│  │                                                      │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                               │
-└───────────┬────────────────────────────────┬──────────────┘
-            │                                │
-            ↓                                ↓
-    ┌──────────────────┐          ┌──────────────────┐
-    │  PostgreSQL 16   │          │   Redis 7        │
-    │  + pgvector      │          │   Alpine         │
-    │  (SE provides)   │          │   (SE provides)  │
-    │  :5432           │          │   :6379          │
-    └──────────────────┘          └──────────────────┘
+```mermaid
+flowchart LR
+    U[Unity AR game] --> G[Gateway :8000<br/>System Engineer]
+    R[React Native app] --> G
+    G -->|REST /api/chat| A[AI service :8001<br/>FastAPI]
+    G -->|WS /ws/adapt| A
+    A -->|cache-first| C[(Redis 7 :6379)]
+    A -->|SQL + vector search| P[(PostgreSQL 16 + pgvector :5432)]
+    G -.->|logs learner events| P
 ```
 
-### 🔄 Data Flow (Chat Example)
+Chat request flow:
 
-```
-1. User Question
-   ↓
-2. main_service.py (/api/chat)
-   ↓
-3. Input Validation
-   ├─ Check question not empty
-   ├─ Check user_id valid
-   └─ Check session_id valid
-   ↓
-4. RAG Service
-   ├─ Generate embedding (384-dim)
-   ├─ Query pgvector (IVFFlat index)
-   ├─ Retrieve top-3 documents
-   └─ Check similarity threshold (τ=0.40)
-   ↓
-5. If on-topic:
-   ├─ Format context with documents
-   ├─ Generate answer (curriculum-based)
-   ├─ Calculate confidence
-   └─ Log decision
-   ↓
-6. Bandit Service
-   ├─ Get current state vector (8D)
-   ├─ Make action recommendation
-   └─ Record reward signal
-   ↓
-7. Return Response
-   ├─ Answer text
-   ├─ Confidence metrics
-   ├─ Latency info
-   └─ Decision ID for tracking
-   ↓
-8. Scheduler (background)
-   ├─ Update session state (Redis)
-   ├─ Log event (PostgreSQL)
-   ├─ Decay engagement score
-   └─ Refresh ETL every 60s
+```mermaid
+flowchart LR
+    Q[POST /api/chat] --> E[Embed question<br/>all-MiniLM-L6-v2]
+    E --> K{Redis hit?}
+    K -- yes --> X[Use cached context]
+    K -- no --> S[pgvector cosine search<br/>top-3]
+    S --> T{similarity >= 0.40?}
+    X --> T
+    T -- yes --> A1[Curriculum answer]
+    T -- no --> A2[Off-topic reply]
+    A1 --> B[Bandit picks an action<br/>decision_id returned]
+    A2 --> B
 ```
 
-### 📦 Service Dependency Graph
+The AI service is internal. Authentication, rate limiting and HTTPS are expected to be handled by the Gateway.
+
+## Repository layout
 
 ```
-main_service.py
-    ├── config_prod.py
-    ├── database_service.py
-    │   └── config_prod.py
-    ├── rag_service.py
-    │   ├── config_prod.py
-    │   └── database_service.py
-    ├── bandit_service.py
-    │   └── config_prod.py
-    └── scheduler_service.py
-        └── config_prod.py
-
-(all use FastAPI, asyncio, logging)
+.
+├── main_service.py            FastAPI app: endpoints, startup/shutdown
+├── config_prod.py             Settings from environment variables
+├── database_service.py        Async SQLAlchemy engine, pool, session manager
+├── rag_service.py             Embedding, pgvector search, guardrail, cache-first retrieval
+├── cache_service.py           Redis cache client with hit/miss stats
+├── bandit_service.py          Epsilon-greedy contextual bandit (8 actions)
+├── scheduler_service.py       APScheduler ETL job (currently disabled)
+├── event_service.py           Event logging draft (not wired or tested; see Known issues)
+├── load_curriculum.py         Chunk, embed and load the curriculum into pgvector
+├── create_curriculum.py       Helper used to build the curriculum text
+├── expanded_dna_curriculum.txt  Curriculum text that is loaded (8,740 characters)
+├── dna_curriculum.txt         Original curriculum text
+├── test_integration.py        Integration tests (Week 4; not re-run in Week 5)
+├── client_examples.py         Example REST and WebSocket clients
+├── Dockerfile                 Multi-stage image for the AI service
+├── docker-compose.yml         PostgreSQL + Redis (owned by SE; do not modify)
+├── 01_schema.sql              Database schema (owned by SE)
+├── requirements.txt           Pinned Python dependencies
+├── .env.example               Template for .env (placeholders only)
+├── .dockerignore
+└── final.md                   Week 4 consolidated report (historical)
 ```
 
----
+`.env` is local only and must never be committed.
 
-## Deliverables
+## Tech stack
 
-### 📦 Files Created (21 Total)
+| Technology | Role |
+|---|---|
+| Python 3.11 | Language and runtime |
+| FastAPI, Uvicorn, Pydantic | REST and WebSocket server, request validation (4 workers in the container) |
+| sentence-transformers, `all-MiniLM-L6-v2` | Text embeddings, 384 dimensions, CPU only |
+| PostgreSQL 16 + pgvector | Relational data and vector similarity search (cosine, IVFFlat index) |
+| SQLAlchemy 2.0 (async) + asyncpg | Database access and connection pool |
+| Redis 7 + redis-py (asyncio) | Cache and learner state |
+| APScheduler | Periodic ETL job (designed; disabled) |
+| NumPy | Vectors and bandit math |
+| Docker, Docker Compose | Packaging and local deployment |
 
-#### 🔧 Core AI Service (6 files - 38.6 KB)
+## Quick start (Windows / PowerShell)
 
-| File | Size | Lines | Purpose |
-|------|------|-------|---------|
-| **main_service.py** | 9.5 KB | 280 | FastAPI orchestrator with chat + WebSocket |
-| **config_prod.py** | 4.2 KB | 125 | Configuration management & env variables |
-| **rag_service.py** | 8.9 KB | 260 | RAG with embedding + pgvector similarity + guardrail |
-| **bandit_service.py** | 5.6 KB | 180 | ε-greedy contextual bandit with Thompson sampling |
-| **database_service.py** | 3.3 KB | 90 | Async PostgreSQL connection pooling |
-| **scheduler_service.py** | 7.1 KB | 210 | Background ETL jobs & session state updates |
+Prerequisites: Docker Desktop (running), Python 3.11, Git. Commands below use PowerShell; there is no `tail` and no heredoc, so use `Select-Object -Last 50` and `notepad`.
 
-**Total Python:** ~1,200 lines of production code
+### 1. Clone and configure
 
-#### 📦 Deployment & Configuration (3 files - 2.9 KB)
-
-| File | Size | Purpose |
-|------|------|---------|
-| **Dockerfile** | 1.2 KB | Multi-stage production build (Python 3.11 base) |
-| **requirements.txt** | 600 B | 20 Python packages, pinned versions |
-| **.dockerignore** | 1.1 KB | Optimize build by excluding unnecessary files |
-
-#### ⚙️ Configuration Files (3 files - 9.4 KB)
-
-| File | Size | Purpose |
-|------|------|---------|
-| **.env.example** | 1.2 KB | Configuration template (for SE's credentials) |
-| **docker-compose.override.yml** | 2.3 KB | Extends SE's stack with AI service container |
-| **startup.ps1** | 5.9 KB | Automated 5-minute setup script (Windows PowerShell) |
-
-#### 📚 Documentation (5 files - 38.7 KB)
-
-| File | Size | Purpose |
-|------|------|---------|
-| **DOCKER_SETUP.md** | 7.9 KB | Complete Docker guide (setup, commands, troubleshooting) |
-| **QUICK_REFERENCE.md** | 4.9 KB | Command cheat sheet for daily operations |
-| **GIT_WORKFLOW.md** | 8.1 KB | Team collaboration guide (branching, PRs, merges) |
-| **FINAL_SUMMARY.md** | 11 KB | Week 4 overview, features, code quality metrics |
-| **ACTION_PLAN.md** | 6.8 KB | Step-by-step deployment checklist (15 min total) |
-
-#### 📖 Reference (2 files - 13.6 KB)
-
-| File | Size | Purpose |
-|------|------|---------|
-| **README_AI_SERVICE.md** | 8.3 KB | API reference, architecture, local setup |
-| **INDEX.md** | 5.3 KB | Complete file inventory and navigation guide |
-
-#### 🧪 Testing & Examples (2 files - 15.4 KB)
-
-| File | Size | Purpose |
-|------|------|---------|
-| **test_integration.py** | 7.1 KB | Integration tests for all services |
-| **client_examples.py** | 8.3 KB | API usage examples (3 realistic scenarios) |
-
-### 📊 Deliverable Summary
-
-```
-Core Services:       6 files,  38.6 KB,  ~1200 lines
-Deployment:          3 files,   2.9 KB,  production-ready
-Configuration:       3 files,   9.4 KB,  SE + AI integrated
-Documentation:       5 files,  38.7 KB,  comprehensive
-Reference:           2 files,  13.6 KB,  API + index
-Testing:             2 files,  15.4 KB,  integration tests
-─────────────────────────────────────────────────────────
-TOTAL:              21 files, 118.6 KB,  production code
-```
-
----
-
-## Technical Implementation
-
-### 1️⃣ RAG Service (`rag_service.py`)
-
-**Purpose:** Retrieve relevant curriculum documents and ensure responses are curriculum-grounded.
-
-**Implementation Details:**
-
-```python
-Class: RAGService
-├─ __init__(config, db_service)
-│  ├─ Load embedding model (all-MiniLM-L6-v2)
-│  ├─ Initialize PostgreSQL connection pool
-│  └─ Set RAG threshold (τ=0.40 cosine similarity)
-│
-├─ Method: get_embedding(text) → np.ndarray
-│  ├─ Input: Question/content text
-│  ├─ Process: sentence-transformers model
-│  ├─ Output: 384-dimensional embedding vector
-│  └─ Time: <5ms per question
-│
-├─ Method: retrieve_documents(question, top_k=3)
-│  ├─ Input: User question
-│  ├─ Query pgvector with IVFFlat index
-│  │  - Cosine similarity search
-│  │  - Retrieve top_k=3 documents
-│  │  - Calculate max similarity score
-│  ├─ Apply guardrail:
-│  │  - If max_similarity >= 0.40: on-topic
-│  │  - If max_similarity < 0.40: off-topic
-│  ├─ Output: List[DocumentChunk] with scores
-│  └─ Time: <45ms total (including embedding)
-│
-└─ Error Handling:
-   ├─ Embedding timeout (>1.5s) → return default
-   ├─ Database connection → retry with exponential backoff
-   ├─ Invalid input → reject early with validation
-   └─ Logging at CRITICAL, ERROR, WARNING levels
-```
-
-**Key Features:**
-- ✅ **Async/await** for non-blocking operations
-- ✅ **Connection pooling** (10 connections) to PostgreSQL
-- ✅ **Type hints** on all parameters and returns
-- ✅ **Comprehensive docstrings** for IDE autocomplete
-- ✅ **Logging** at every critical decision point
-
-**Performance Metrics:**
-- Embedding generation: ~5ms
-- pgvector query: ~20ms
-- Similarity calculation: ~10ms
-- Document formatting: ~10ms
-- **Total RAG latency: <45ms** (target met)
-
-**Guardrail Logic:**
-```python
-def check_on_topic(similarity_score: float) -> bool:
-    """
-    Guardrail ensures only curriculum-aligned responses.
-    
-    Args:
-        similarity_score: Cosine similarity [0, 1]
-    
-    Returns:
-        True if similarity >= 0.40 (threshold)
-    """
-    if similarity_score >= 0.40:
-        return True  # On-topic: use retrieved context
-    else:
-        return False  # Off-topic: respond with disclaimer
-```
-
-### 2️⃣ Bandit Service (`bandit_service.py`)
-
-**Purpose:** Recommend personalized learning actions based on student state and learning performance.
-
-**Implementation Details:**
-
-```python
-Class: ContextualBandit
-├─ State Vector (8 dimensions):
-│  ├─ [0] Correctness (1.0 if correct, 0.0 if wrong)
-│  ├─ [1] Response Time (normalized to [0, 1])
-│  ├─ [2] Difficulty Level (scale of 1/3 to 1)
-│  ├─ [3] Topic Match (similarity to known topics)
-│  ├─ [4] Engagement (decay over time)
-│  ├─ [5] Question Count (question frequency)
-│  ├─ [6] Error Rate (1.0 if error, 0.0 if correct)
-│  └─ [7] Time Spent (normalized session duration)
-│
-├─ Action Space (8 discrete actions):
-│  ├─ 0: increase_difficulty    → More challenging content
-│  ├─ 1: decrease_difficulty    → Easier review material
-│  ├─ 2: maintain_difficulty    → Continue current level (baseline)
-│  ├─ 3: show_hint              → Display hint for question
-│  ├─ 4: hide_hint              → Challenge mode (no hints)
-│  ├─ 5: suggest_quiz           → Practice quiz
-│  ├─ 6: suggest_ar_activity    → AR simulation
-│  └─ 7: switch_scene           → Different AR environment
-│
-├─ Algorithm: ε-greedy (Thompson Sampling variant)
-│  ├─ Exploration: ε=0.15 (15% random action)
-│  ├─ Exploitation: 1-ε=0.85 (85% best action)
-│  ├─ State-action value update (online learning)
-│  ├─ Reward signal: user feedback + correctness
-│  └─ Learning rate: adaptive (decays over time)
-│
-├─ Method: select_action(state_vector) → int
-│  ├─ Input: 8-dimensional state vector
-│  ├─ Decision process:
-│  │  ├─ With probability ε: random action (exploration)
-│  │  ├─ With probability 1-ε: greedy action (exploitation)
-│  ├─ Output: action_id [0-7]
-│  └─ Time: <5ms (numpy operations only)
-│
-├─ Method: update_value(state, action, reward)
-│  ├─ Input: state vector, chosen action, reward signal
-│  ├─ Update: state-action value function
-│  ├─ Learning: incremental (online)
-│  └─ Time: <2ms
-│
-└─ Logging:
-   ├─ Decision ID for tracking
-   ├─ Exploration vs exploitation flag
-   ├─ Selected action name
-   ├─ Confidence score
-   └─ Timestamp for analysis
-```
-
-**Thompson Sampling Details:**
-```
-For each action:
-1. Maintain beta distribution (α, β parameters)
-2. Sample from each distribution
-3. Choose action with highest sample
-4. Update distribution based on reward:
-   - If reward = 1: α += 1 (success)
-   - If reward = 0: β += 1 (failure)
-```
-
-**Key Features:**
-- ✅ **Online learning** (no batch retraining needed)
-- ✅ **Exploration-exploitation tradeoff** (ε=0.15)
-- ✅ **Type hints** for safety
-- ✅ **Stateless** (state passed in, value functions in Redis)
-- ✅ **Fast decisions** (<5ms typical)
-
-**Performance:**
-- Decision latency: <5ms
-- Value update: <2ms
-- **Total bandit time: <10ms** (well within budget)
-
-### 3️⃣ Database Service (`database_service.py`)
-
-**Purpose:** Manage async PostgreSQL connections and queries.
-
-**Implementation:**
-
-```python
-Class: DatabaseService
-├─ __init__(config)
-│  ├─ Create async engine (asyncpg driver)
-│  ├─ Configure connection pool (min=5, max=10)
-│  ├─ Set query timeout (30 seconds)
-│  └─ Enable prepared statement caching
-│
-├─ Method: get_connection() → AsyncConnection
-│  ├─ Acquire from pool with timeout
-│  ├─ Return for use in async context
-│  └─ Auto-release on scope exit
-│
-├─ Method: execute_query(query: str, params: tuple)
-│  ├─ Execute parameterized query (SQL injection safe)
-│  ├─ Return result rows
-│  ├─ Log slow queries (>1s)
-│  └─ Retry on transient failures
-│
-├─ Method: fetch_documents(topic_id: int)
-│  ├─ Retrieve document chunks from DB
-│  ├─ Query structure:
-│  │  ├─ SELECT chunk_text, embedding FROM document_chunks
-│  │  ├─ WHERE topic_id = ? AND active = true
-│  │  ├─ ORDER BY created_at DESC
-│  │  └─ LIMIT 100
-│  ├─ Result: List[DocumentChunk]
-│  └─ Time: <20ms
-│
-└─ Error Handling:
-   ├─ Connection pool exhaustion → queue request
-   ├─ Query timeout → retry or fail gracefully
-   ├─ Deadlock → exponential backoff
-   └─ Database down → health check fails
-```
-
-**Pool Configuration:**
-- **Min connections:** 5 (baseline)
-- **Max connections:** 10 (peak load)
-- **Idle timeout:** 30 minutes
-- **Query timeout:** 30 seconds
-- **Connection timeout:** 10 seconds
-
-**SQL Injection Prevention:**
-- ✅ All queries use parameterized statements
-- ✅ No string concatenation
-- ✅ Type checking at Python level
-- ✅ SQLAlchemy ORM for safety
-
-### 4️⃣ Scheduler Service (`scheduler_service.py`)
-
-**Purpose:** Run background tasks (ETL, state updates) without blocking API.
-
-**Implementation:**
-
-```python
-Class: SchedulerService
-├─ __init__(config, db_service, bandit_service)
-│  ├─ Initialize APScheduler
-│  ├─ Set up distributed locks (Redis)
-│  └─ Configure job stores
-│
-├─ Job 1: etl_refresh (every 60 seconds)
-│  ├─ Purpose: Refresh embedding embeddings, update indices
-│  ├─ Steps:
-│  │  ├─ Acquire distributed lock (Redis)
-│  │  ├─ Fetch new documents from DB
-│  │  ├─ Generate/update embeddings (batch)
-│  │  ├─ Upsert to pgvector (bulk insert)
-│  │  ├─ Refresh IVFFlat index
-│  │  ├─ Log completion
-│  │  └─ Release lock
-│  ├─ Duration: <30 seconds
-│  └─ Errors: Log and continue (resilient)
-│
-├─ Job 2: update_session_state (every 30 seconds)
-│  ├─ Purpose: Decay engagement, update metrics
-│  ├─ Steps:
-│  │  ├─ Get active sessions from Redis
-│  │  ├─ Decay engagement score: new = old * 0.95
-│  │  ├─ Increment time_spent counter
-│  │  ├─ Update bandit state vector
-│  │  ├─ Cache back to Redis (TTL 4 hours)
-│  │  └─ Periodic sync to PostgreSQL
-│  ├─ Duration: <10 seconds
-│  └─ Concurrency: Safe with locks
-│
-├─ Job 3: health_check (every 10 seconds)
-│  ├─ Purpose: Verify service health
-│  ├─ Checks:
-│  │  ├─ PostgreSQL connection
-│  │  ├─ Redis connection
-│  │  ├─ Embedding model loaded
-│  │  └─ API responding
-│  └─ Logging: Set /health endpoint status
-│
-└─ Error Handling:
-   ├─ Job failure: Log exception, don't crash scheduler
-   ├─ Lock timeout: Skip job, try next cycle
-   ├─ Database error: Retry with exponential backoff
-   └─ Monitoring: Send alerts for critical failures
-```
-
-**Distributed Locking (Redis):**
-```
-1. Try to acquire lock: SET lock:etl NX EX 60
-2. If acquired: run job, release lock
-3. If not acquired: skip (other instance running)
-4. Prevents duplicate processing
-```
-
-**Performance Budget:**
-- ETL refresh: <30s (won't block if < 60s window)
-- Session updates: <10s
-- Health checks: <2s
-- **Total overhead: minimal** (async, non-blocking)
-
-### 5️⃣ Main Service (`main_service.py`)
-
-**Purpose:** FastAPI application that orchestrates all services and exposes endpoints.
-
-**Implementation:**
-
-```python
-FastAPI Application
-├─ Startup:
-│  ├─ Load configuration
-│  ├─ Initialize services:
-│  │  ├─ Database service (PostgreSQL pool)
-│  │  ├─ RAG service (embedding model)
-│  │  ├─ Bandit service (value functions)
-│  │  └─ Scheduler service (background jobs)
-│  ├─ Start scheduler
-│  └─ Log initialization complete
-│
-├─ Endpoints:
-│  ├─ GET /health
-│  │  ├─ Response: {"status": "healthy", ...}
-│  │  ├─ Checks: DB, Redis, RAG ready, scheduler running
-│  │  └─ Latency: <100ms
-│  │
-│  ├─ POST /api/chat
-│  │  ├─ Request body:
-│  │  │  ├─ question: string (required)
-│  │  │  ├─ user_id: string (required)
-│  │  │  ├─ session_id: string (required)
-│  │  │  └─ module_id: string (optional)
-│  │  ├─ Processing:
-│  │  │  ├─ Validate input
-│  │  │  ├─ Generate embedding (RAG)
-│  │  │  ├─ Check similarity threshold
-│  │  │  ├─ Get bandit action
-│  │  │  ├─ Generate/format response
-│  │  │  └─ Log event
-│  │  ├─ Response:
-│  │  │  ├─ answer: string (response text)
-│  │  │  ├─ is_on_topic: boolean
-│  │  │  ├─ max_similarity: float (0-1)
-│  │  │  ├─ num_documents: int (retrieved)
-│  │  │  ├─ latency_ms: float
-│  │  │  └─ decision_id: string (tracking)
-│  │  └─ Latency: <500ms (SLA)
-│  │
-│  └─ WS /ws/adapt/{session_id}
-│     ├─ Purpose: Real-time adaptation via WebSocket
-│     ├─ Connection:
-│     │  ├─ Accept WebSocket upgrade
-│     │  ├─ Load session state from Redis
-│     │  ├─ Send initial state vector
-│     │  └─ Begin message loop
-│     ├─ Receive (from client):
-│     │  ├─ question: string
-│     │  ├─ correct: boolean (answer correctness)
-│     │  ├─ response_time_ms: float
-│     │  └─ difficulty: int (1-3)
-│     ├─ Server processing:
-│     │  ├─ Build state vector (8D)
-│     │  ├─ Bandit selects action
-│     │  ├─ Determine reward
-│     │  ├─ Update state (Redis)
-│     │  └─ Record event (PostgreSQL)
-│     ├─ Send (to client):
-│     │  ├─ action_id: int [0-7]
-│     │  ├─ action_name: string
-│     │  ├─ reward: float
-│     │  └─ timestamp: ISO string
-│     └─ Latency: <150ms (SLA)
-│
-├─ Middleware:
-│  ├─ CORS: Allow frontend origin (configurable)
-│  ├─ Error handling: Global 404, 500 handlers
-│  ├─ Logging: Request/response at INFO level
-│  └─ Validation: Pydantic models for type safety
-│
-└─ Shutdown:
-   ├─ Stop scheduler gracefully
-   ├─ Close database connections
-   ├─ Flush remaining logs
-   └─ Signal successful shutdown
-```
-
-**Error Responses:**
-
-```python
-# 400 Bad Request (invalid input)
-{
-  "detail": "Question cannot be empty",
-  "status": 400
-}
-
-# 404 Not Found (session not found)
-{
-  "detail": "Session not found",
-  "status": 404
-}
-
-# 503 Service Unavailable (database down)
-{
-  "detail": "Database connection failed",
-  "status": 503
-}
-```
-
-### 6️⃣ Configuration (`config_prod.py`)
-
-**Purpose:** Centralized configuration management using environment variables.
-
-**Configuration Structure:**
-
-```python
-class Config:
-    # API Configuration
-    API_HOST = "0.0.0.0"
-    API_PORT = 8001
-    API_WORKERS = 4
-    DEBUG = False
-    
-    # Database Configuration
-    POSTGRES_USER = "appuser"
-    POSTGRES_DB = "eduarai"
-    POSTGRES_HOST = "eduarai_postgres"
-    POSTGRES_PORT = 5432
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "changeme")
-    DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{DB_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-    
-    # Redis Configuration
-    REDIS_HOST = "eduarai_redis"
-    REDIS_PORT = 6379
-    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "changeme")
-    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
-    REDIS_TIMEOUT = 5
-    
-    # RAG Configuration
-    RAG_THRESHOLD = 0.40          # Cosine similarity threshold
-    RAG_TOP_K = 3                 # Documents to retrieve
-    RAG_TIMEOUT = 1.5             # Retrieval timeout
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-    EMBEDDING_DIM = 384
-    
-    # Bandit Configuration
-    BANDIT_EPSILON = 0.15         # Exploration rate
-    BANDIT_STATE_DIM = 8
-    BANDIT_ACTION_COUNT = 8
-    
-    # Scheduler Configuration
-    ETL_REFRESH_INTERVAL = 60     # Every 60 seconds
-    ETL_SESSION_WINDOW = 30       # Active session window (minutes)
-    SESSION_STATE_TTL = 14400     # 4 hours
-    ENGAGEMENT_DECAY_RATE = 0.95  # Per update cycle
-    
-    # Logging
-    LOG_LEVEL = "INFO" if not DEBUG else "DEBUG"
-    LOG_FORMAT = "[%(asctime)s] %(name)s - %(levelname)s - %(message)s"
-```
-
-**Environment Variables (.env):**
-
-```bash
-# From SE (required - ask for values)
-DB_PASSWORD=<strong_password_from_SE>
-REDIS_PASSWORD=<strong_password_from_SE>
-
-# Optional (defaults shown)
-DEBUG=False
-POSTGRES_USER=appuser
-POSTGRES_DB=eduarai
-API_PORT=8001
-RAG_THRESHOLD=0.40
-BANDIT_EPSILON=0.15
-ETL_REFRESH_INTERVAL=60
-```
-
----
-
-## Deployment Setup
-
-### 🚀 Quick Start (5 Minutes)
-
-#### Prerequisites
-
-```bash
-# Check Docker
-docker --version          # Expected: Docker 20.10+
-docker-compose --version  # Expected: docker-compose 2.0+
-
-# Python (for local development)
-python --version          # Expected: Python 3.11+
-```
-
-#### Step 1: Gather Files & Credentials
-
-```bash
-# Copy all 21 files from /mnt/user-data/outputs/ to E:\Thesis\
-# Ask SE for:
-# ✅ DB_PASSWORD (PostgreSQL password)
-# ✅ REDIS_PASSWORD (Redis password)
-```
-
-#### Step 2: Create Configuration
-
-```bash
-cd E:\Thesis
-
-# Copy template
-copy .env.example .env
-
-# Edit with SE's credentials
-notepad .env
-
-# Fill in:
-DB_PASSWORD=<from_SE>
-REDIS_PASSWORD=<from_SE>
-```
-
-#### Step 3: Run Startup Script
-
-```bash
-# Allow PowerShell scripts (one-time)
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-
-# Run automation
-.\startup.ps1
-
-# Script will:
-# ✅ Check Docker running
-# ✅ Verify .env configuration
-# ✅ Check required files present
-# ✅ Build AI service image
-# ✅ Start all 3 containers
-# ✅ Wait for health checks
-# ✅ Display service URLs
-```
-
-**Expected Output:**
-```
-✅ Docker environment verified
-✅ Configuration validated
-✅ Building Docker image...
-✅ Starting containers...
-✅ Waiting for PostgreSQL initialization...
-✅ Waiting for health checks...
-
-✅ Stack Started Successfully
-
-📋 Services:
-NAME                STATUS       PORTS
-eduarai_postgres    Up          5432/tcp
-eduarai_redis       Up          6379/tcp
-eduarai_ai          Up          8001/tcp
-
-🌐 URLs:
-  API:        http://localhost:8001
-  Health:     http://localhost:8001/health
-  Database:   localhost:5432 (PostgreSQL)
-  Cache:      localhost:6379 (Redis)
-
-✅ Ready for development!
-```
-
-#### Step 4: Verify Deployment
-
-```bash
-# Check all containers running
-docker-compose ps
-
-# Test health endpoint
-curl http://localhost:8001/health
-
-# Test chat endpoint
-curl -X POST http://localhost:8001/api/chat `
-  -H "Content-Type: application/json" `
-  -d '{"question":"What is DNA?","user_id":"test","session_id":"test"}'
-```
-
-#### Step 5: Commit to Git
-
-```bash
-git add *.py Dockerfile requirements.txt .env.example docker-compose.override.yml .dockerignore startup.ps1 *.md
-
-git commit -m "Week 4: AI service with RAG + contextual bandit (Docker-ready)"
-
-git push origin week4-postgres-integration
-```
-
-**⏱️ Total Time: ~15 minutes**
-
----
-
-## API Documentation
-
-### 🌐 Health Check Endpoint
-
-**Endpoint:** `GET /health`
-
-**Purpose:** Verify service is operational and dependencies are connected.
-
-**Response (200 OK):**
-```json
-{
-  "status": "healthy",
-  "service": "eduarai-ai",
-  "database": "connected",
-  "rag_ready": true,
-  "scheduler_running": true,
-  "timestamp": "2026-09-19T10:30:15Z"
-}
-```
-
-**Latency SLA:** <100ms  
-**Check Interval:** Every 10 seconds (scheduler)
-
----
-
-### 💬 Chat Endpoint
-
-**Endpoint:** `POST /api/chat`
-
-**Purpose:** Ask a question and receive a curriculum-grounded answer with adaptation recommendation.
-
-**Request:**
-```bash
-curl -X POST http://localhost:8001/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is DNA and how does it replicate?",
-    "user_id": "student-001",
-    "session_id": "session-abc123",
-    "module_id": "dna-module-01"
-  }'
-```
-
-**Request Parameters:**
-
-| Parameter | Type | Required | Example | Purpose |
-|-----------|------|----------|---------|---------|
-| `question` | string | Yes | "What is DNA?" | User's question |
-| `user_id` | string | Yes | "student-001" | Student identifier |
-| `session_id` | string | Yes | "session-abc" | Learning session ID |
-| `module_id` | string | No | "dna-01" | Topic module |
-
-**Request Validation:**
-- ✅ Question not empty (length > 0)
-- ✅ Question not too long (length < 5000)
-- ✅ User ID format valid
-- ✅ Session ID format valid
-
-**Response (200 OK):**
-```json
-{
-  "answer": "DNA (deoxyribonucleic acid) is the molecule that carries genetic instructions for life. It consists of two strands twisted in a double helix structure. During replication, the double helix unwinds, and each strand serves as a template for creating a new complementary strand. This is catalyzed by DNA polymerase enzyme.",
-  "is_on_topic": true,
-  "max_similarity": 0.78,
-  "num_documents": 3,
-  "latency_ms": 145.2,
-  "decision_id": "dec-xyz789",
-  "bandit_action": {
-    "action_id": 2,
-    "action_name": "maintain_difficulty",
-    "confidence": 0.92
-  }
-}
-```
-
-**Response Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `answer` | string | Generated response (curriculum-based) |
-| `is_on_topic` | boolean | Whether question matched curriculum (similarity ≥ 0.40) |
-| `max_similarity` | float | Highest document similarity [0, 1] |
-| `num_documents` | int | Count of retrieved documents |
-| `latency_ms` | float | Total processing time (milliseconds) |
-| `decision_id` | string | Unique ID for tracking this interaction |
-| `bandit_action.action_id` | int | Recommended action [0-7] |
-| `bandit_action.action_name` | string | Action description |
-| `bandit_action.confidence` | float | Confidence in recommendation [0, 1] |
-
-**Actions (8 choices):**
-- 0 = `increase_difficulty` → More challenging content
-- 1 = `decrease_difficulty` → Easier review
-- 2 = `maintain_difficulty` → Continue current level
-- 3 = `show_hint` → Display hint
-- 4 = `hide_hint` → Challenge mode
-- 5 = `suggest_quiz` → Practice quiz
-- 6 = `suggest_ar_activity` → AR simulation
-- 7 = `switch_scene` → Different AR environment
-
-**Error Responses:**
-
-```json
-// 400 Bad Request
-{
-  "detail": "Question cannot be empty",
-  "status": 400
-}
-
-// 503 Service Unavailable
-{
-  "detail": "Database connection failed",
-  "status": 503
-}
-```
-
-**Performance Targets:**
-- ✅ Latency <500ms (SLA)
-- ✅ RAG retrieval <45ms
-- ✅ Bandit decision <10ms
-
-**Example Flow:**
-```
-1. User: "What is photosynthesis?"
-   ↓
-2. API: Process and respond
-   - Embed question (5ms)
-   - Query pgvector (20ms)
-   - Get top 3 documents
-   - Check similarity (0.72 >= 0.40) ✓
-   - Generate answer (80ms)
-   - Bandit recommends action (3ms)
-   ↓
-3. Response: On-topic answer + maintain_difficulty action
-   Total time: 145ms ✓ (under 500ms SLA)
-```
-
----
-
-### 🔄 WebSocket Endpoint
-
-**Endpoint:** `WS /ws/adapt/{session_id}`
-
-**Purpose:** Real-time bidirectional adaptation with immediate feedback.
-
-**Connection:**
-```javascript
-// JavaScript Client
-const ws = new WebSocket("ws://localhost:8001/ws/adapt/session-123");
-
-ws.onopen = () => {
-  console.log("Connected to adaptation service");
-};
-```
-
-**Sending Interaction Event:**
-```javascript
-ws.send(JSON.stringify({
-  "question": "What causes mutations?",
-  "correct": true,
-  "response_time_ms": 2500,
-  "difficulty": 2
-}));
-```
-
-**Received Adaptation:**
-```javascript
-ws.onmessage = (event) => {
-  const adaptation = JSON.parse(event.data);
-  console.log(adaptation);
-  // {
-  //   "action_id": 2,
-  //   "action_name": "maintain_difficulty",
-  //   "reward": 1.0,
-  //   "timestamp": "2026-09-19T10:30:15Z"
-  // }
-};
-```
-
-**Message Format (Send):**
-
-| Field | Type | Description | Range |
-|-------|------|-------------|-------|
-| `question` | string | Question asked | Any |
-| `correct` | boolean | Answer correctness | true/false |
-| `response_time_ms` | float | Time to respond | 0-60000 |
-| `difficulty` | int | Perceived difficulty | 1-3 |
-
-**Message Format (Receive):**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `action_id` | int | Recommended action [0-7] |
-| `action_name` | string | Action description |
-| `reward` | float | Reward signal [0, 1] |
-| `timestamp` | string | ISO timestamp |
-
-**Latency SLA:** <150ms
-
----
-
-## Docker Configuration
-
-### 🐳 Service Stack
-
-**Three-container architecture:**
-
-```
-┌─────────────────────────────────────────┐
-│    Docker Compose Network                │
-│    (eduarai_network)                     │
-├─────────────────────────────────────────┤
-│                                         │
-│  Container 1: eduarai_postgres          │
-│  ├─ Image: pgvector/pgvector:pg16       │
-│  ├─ Ports: 5432:5432                    │
-│  ├─ Volumes: pgdata (persistent)        │
-│  ├─ Env: POSTGRES_USER, DB_PASSWORD     │
-│  └─ Health: pg_isready                  │
-│                                         │
-│  Container 2: eduarai_redis             │
-│  ├─ Image: redis:7-alpine               │
-│  ├─ Ports: 6379:6379                    │
-│  ├─ Volumes: redisdata (persistent)     │
-│  ├─ Env: REDIS_PASSWORD                 │
-│  └─ Health: redis-cli ping              │
-│                                         │
-│  Container 3: eduarai_ai                │
-│  ├─ Image: eduarai-ai:latest            │
-│  ├─ Ports: 8001:8001                    │
-│  ├─ Build: Dockerfile                   │
-│  ├─ Env: All from .env                  │
-│  ├─ Depends: postgres, redis            │
-│  └─ Health: /health endpoint            │
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-### Dockerfile Analysis
-
-**Multi-stage Build:**
-
-```dockerfile
-# Stage 1: Builder
-FROM python:3.11-slim as builder
-WORKDIR /build
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Stage 2: Runtime
-FROM python:3.11-slim
-WORKDIR /app
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-# Copy application code
-COPY *.py ./
-COPY config_prod.py ./
-ENV PATH=/root/.local/bin:$PATH
-EXPOSE 8001
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
-  CMD curl -f http://localhost:8001/health || exit 1
-CMD ["python", "main_service.py"]
-```
-
-**Build Strategy:**
-- ✅ Slim base image (130MB vs 1GB for full)
-- ✅ Multi-stage to reduce final size (~450MB total)
-- ✅ User packages cached in builder
-- ✅ Health check built-in
-- ✅ Production ready (no development dependencies)
-
-### docker-compose.override.yml
-
-**Purpose:** Extends SE's docker-compose.yml with AI service container.
-
-```yaml
-version: '3.8'
-
-services:
-  # AI Service (added by this override)
-  ai-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: eduarai_ai
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://appuser:${DB_PASSWORD}@postgres:5432/eduarai
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - DEBUG=False
-      - API_PORT=8001
-      - RAG_THRESHOLD=0.40
-      - BANDIT_EPSILON=0.15
-    ports:
-      - "${API_PORT:-8001}:8001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - eduarai_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-volumes:
-  pgdata:
-  redisdata:
-
-networks:
-  eduarai_network:
-    driver: bridge
-```
-
-### Environment File (.env)
-
-**Template (.env.example):**
-```bash
-# PostgreSQL Configuration (from SE)
-POSTGRES_USER=appuser
-POSTGRES_DB=eduarai
-DB_PASSWORD=changeme_strong_password_from_SE
-
-# Redis Configuration (from SE)
-REDIS_PASSWORD=changeme_strong_password_from_SE
-
-# API Configuration
-API_PORT=8001
-DEBUG=False
-
-# RAG Configuration
-RAG_THRESHOLD=0.40
-RAG_TOP_K=3
-RAG_TIMEOUT=1.5
-
-# Bandit Configuration
-BANDIT_EPSILON=0.15
-BANDIT_STATE_DIM=8
-
-# Scheduler Configuration
-ETL_REFRESH_INTERVAL=60
-SESSION_STATE_TTL=14400
-```
-
-**Production .env (your copy):**
-```bash
-# Fill in SE's actual passwords
-POSTGRES_USER=appuser
-POSTGRES_DB=eduarai
-DB_PASSWORD=Xk#9mL$2vP@5qR!8nO   # Actual password from SE
-
-REDIS_PASSWORD=8Yz@4dT!6fJ&2hB$w   # Actual password from SE
-
-API_PORT=8001
-DEBUG=False
-
-# Rest same as template
-```
-
-### Common Docker Commands
-
-**Start Stack:**
-```bash
-docker-compose up -d
-```
-
-**View Status:**
-```bash
-docker-compose ps
-
-# Output:
-# NAME                STATUS       PORTS
-# eduarai_postgres    Up 2 minutes 5432/tcp
-# eduarai_redis       Up 2 minutes 6379/tcp
-# eduarai_ai          Up 1 minute  0.0.0.0:8001->8001/tcp
-```
-
-**View Logs:**
-```bash
-# All services
-docker-compose logs -f
-
-# AI service only
-docker-compose logs -f ai-service
-
-# Last 50 lines
-docker-compose logs --tail=50 ai-service
-```
-
-**Stop/Restart:**
-```bash
-# Stop (keep data)
-docker-compose stop
-
-# Restart
-docker-compose restart
-
-# Down (remove containers, keep data)
-docker-compose down
-
-# Down with volume wipe (DANGEROUS)
-docker-compose down -v
-```
-
-**Rebuild:**
-```bash
-# Rebuild AI service image
-docker-compose build ai-service --no-cache
-
-# Then restart
-docker-compose up -d ai-service
-```
-
----
-
-## Git Workflow & Collaboration
-
-### 🌳 Branch Strategy
-
-**Main branches:**
-```
-main (production)
-  ↑
-  ├── data-layer (SE's infrastructure - LOCKED)
-  │   ├── docker-compose.yml (you don't modify)
-  │   ├── 01_schema.sql (you don't modify)
-  │   └── .env.example (template only)
-  │
-  └── week4-postgres-integration (YOUR feature branch)
-      ├── main_service.py (you create/modify)
-      ├── rag_service.py
-      ├── All AI service code
-      ├── Dockerfile
-      ├── docker-compose.override.yml
-      └── Documentation
-```
-
-### 📋 Initial Setup
-
-```bash
-# 1. Clone repository
+```powershell
 git clone https://github.com/StormyStack/Thesis.git
 cd Thesis
+git checkout AI_Code_Works
 
-# 2. List all branches
-git branch -a
-# * main
-#   remotes/origin/data-layer
-#   remotes/origin/week4-postgres-integration
-
-# 3. Checkout SE's infrastructure (read-only)
-git fetch origin
-git checkout data-layer
-# You now have: docker-compose.yml, 01_schema.sql, .env.example
-
-# 4. Checkout your feature branch
-git checkout week4-postgres-integration
-# You now have: All AI service files, overrides, documentation
+copy .env.example .env
+notepad .env        # fill in the passwords (ask SE); never commit this file
 ```
 
-### 🔄 Daily Workflow
+Passwords that contain `#` must be written as `%23` wherever they are used inside a URL or passed to the container as `DB_PASSWORD` / `REDIS_PASSWORD` (the service builds connection URLs from them).
 
-**Morning:**
-```bash
-cd E:\Thesis
-.\.venv\Scripts\Activate.ps1  # Activate virtual environment
-git fetch origin               # Get latest changes
-git checkout week4-postgres-integration
-git pull origin week4-postgres-integration
-docker-compose up -d           # Start services
-```
+### 2. Start PostgreSQL and Redis
 
-**During Development:**
-```bash
-# Make changes
-notepad main_service.py
-# ... edit code ...
-
-# Check status
-git status
-
-# See changes
-git diff main_service.py
-
-# Stage and commit
-git add main_service.py config_prod.py
-git commit -m "Fix RAG threshold validation and add logging"
-
-# Push to feature branch
-git push origin week4-postgres-integration
-```
-
-**Evening:**
-```bash
-# Ensure everything committed
-git status
-# Should show: "nothing to commit, working tree clean"
-
-# Final push
-git push origin week4-postgres-integration
-
-# Stop services
-docker-compose stop
-```
-
-### 🔀 Syncing with SE's Updates
-
-**If SE updates the schema or infrastructure:**
-
-```bash
-# SE notifies: "Updated 01_schema.sql in data-layer"
-
-# 1. Fetch SE's changes
-git fetch origin data-layer
-
-# 2. Merge into your feature branch
-git checkout week4-postgres-integration
-git merge origin/data-layer --no-edit
-
-# 3. Restart services with new schema
-docker-compose down -v  # WARNING: wipes data
+```powershell
 docker-compose up -d
-
-# 4. Push merged changes
-git push origin week4-postgres-integration
+Start-Sleep -Seconds 20
+docker-compose ps         # both should be Up (healthy)
 ```
 
-### ✅ Before Creating Pull Request
+On a fresh volume, PostgreSQL runs `01_schema.sql` automatically. Deleting the volume (`docker volume rm thesis_pgdata`) wipes the curriculum; reload it with step 3.
 
-**Checklist:**
+### 3. Load the curriculum
 
-```bash
-# 1. Final tests
-docker-compose down -v
-docker-compose up -d
-sleep 10
-curl http://localhost:8001/health     # ✅ Must pass
-curl -X POST http://localhost:8001/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What is DNA?","user_id":"test","session_id":"test"}'  # ✅ Must respond
+Run from the host (not inside Docker). In `.env`, `DATABASE_HOST` must be `localhost` for this script.
 
-# 2. Check for secrets
-git status | grep ".env"  # Should show nothing
-grep "changeme" .env.example  # Should find placeholders
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python load_curriculum.py
 
-# 3. Code quality
-pytest tests/ -v          # ✅ All tests passing
-python -m py_compile *.py # ✅ No syntax errors
-black --check *.py        # ✅ Formatting check (optional)
-
-# 4. View your changes
-git log --oneline origin/main..HEAD        # ✅ Your commits
-git diff origin/main..HEAD --stat          # ✅ File changes
+docker exec eduarai_postgres psql -U appuser -d eduarai -c "SELECT COUNT(*) FROM document_chunks WHERE module_id = 'DNA_BIOLOGY_001';"
 ```
 
-### 📤 Create Pull Request
+Expected count: 18 (or the current chunk count). The script is safe to re-run for the module row, but it inserts the chunks again each time, so clear the table first if you reload: `DELETE FROM document_chunks WHERE module_id = 'DNA_BIOLOGY_001';`
 
-**On GitHub:**
+### 4. Build and run the AI service
 
-1. Go to https://github.com/StormyStack/Thesis
-2. Click "Pull Requests" → "New Pull Request"
-3. **Base:** main | **Compare:** week4-postgres-integration
-4. Write description:
+```powershell
+docker build -t eduarai-ai:latest .      # 15-40 minutes the first time; see Docker notes
 
-```markdown
-## Week 4: AI Service with RAG + Contextual Bandit
+docker rm -f eduarai_ai
+docker run -d --name eduarai_ai -p 8001:8001 `
+  -e DATABASE_HOST=eduarai_postgres -e DATABASE_PORT=5432 `
+  -e POSTGRES_USER=appuser -e DB_PASSWORD=<url-encoded password> -e POSTGRES_DB=eduarai `
+  -e REDIS_HOST=eduarai_redis -e REDIS_PORT=6379 -e REDIS_PASSWORD=<url-encoded password> `
+  -e RAG_TIMEOUT=5.0 `
+  --network thesis_default eduarai-ai:latest
 
-### Changes
-- ✅ FastAPI microservice with chat + WebSocket endpoints
-- ✅ RAG service with pgvector cosine similarity
-- ✅ Contextual bandit with 8-action policy
-- ✅ Background ETL scheduler
-- ✅ Full Docker Compose integration
-
-### Testing
-- ✅ Unit tests for RAG and bandit
-- ✅ Integration tests with PostgreSQL
-- ✅ API health checks passing
-- ✅ Chat endpoint responding
-
-### Files
-- main_service.py: FastAPI application
-- rag_service.py: Document retrieval
-- bandit_service.py: Adaptive learning
-- database_service.py: Database layer
-- scheduler_service.py: Background jobs
-- config_prod.py: Configuration
-- Dockerfile: Container image
-- requirements.txt: Dependencies
-
-### Related Issues
-Closes #45 (Week 4 implementation)
+Start-Sleep -Seconds 40       # the embedding model loads at startup (about 25-35 s)
 ```
 
-5. Click "Create Pull Request"
-6. Wait for team review
-7. Address feedback if any
-8. Merge to main
+Inside the Docker network, use the container names (`eduarai_postgres`, `eduarai_redis`). `localhost` inside a container means the container itself.
 
----
+### 5. Verify
 
-## Testing & Verification
-
-### ✅ Health Checks
-
-**Test 1: Docker Containers**
-```bash
-docker-compose ps
-
-# Expected output:
-# NAME                STATUS       PORTS
-# eduarai_postgres    Up 3 minutes 5432/tcp
-# eduarai_redis       Up 3 minutes 6379/tcp
-# eduarai_ai          Up 2 minutes 0.0.0.0:8001->8001/tcp
-```
-
-**Test 2: Health Endpoint**
-```bash
+```powershell
 curl http://localhost:8001/health
+curl -X POST http://localhost:8001/api/chat -H "Content-Type: application/json" -d '{"question":"What is DNA?"}'
+curl http://localhost:8001/api/cache-stats
+docker logs eduarai_ai | Select-Object -Last 50
+```
 
-# Expected response (200 OK):
+### Stop
+
+```powershell
+docker rm -f eduarai_ai
+docker-compose down
+```
+
+## Configuration
+
+All settings come from environment variables (`config_prod.py`). Secrets have no defaults.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_HOST` / `DATABASE_PORT` | `eduarai_postgres` / `5432` | PostgreSQL location (`localhost` for scripts run on the host) |
+| `POSTGRES_USER` / `POSTGRES_DB` | `appuser` / `eduarai` | Database login and name |
+| `DB_PASSWORD` | required | Database password (URL-encode special characters) |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` / `DB_POOL_TIMEOUT` | `10` / `20` / `30` | Connection pool |
+| `REDIS_HOST` / `REDIS_PORT` | `eduarai_redis` / `6379` | Redis location (bare host name, no `redis://` prefix) |
+| `REDIS_PASSWORD` | required | Redis password (URL-encode special characters) |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Embedding model |
+| `RAG_THRESHOLD` | `0.40` | Minimum cosine similarity to count as on-topic |
+| `RAG_TOP_K` | `3` | Chunks returned per query |
+| `RAG_TIMEOUT` | `1.5` | Query encoding timeout in seconds. **Too tight on CPU; the running container sets `5.0`** |
+| `BANDIT_EPSILON` | `0.15` | Exploration rate |
+| `ETL_REFRESH_INTERVAL` / `ETL_SESSION_WINDOW` | `60` / `30` | ETL period (seconds) and active window (minutes) |
+| `API_HOST` / `API_PORT` | `127.0.0.1` / `8001` | Bind settings used by the `python main_service.py` entry point |
+| `MOCK_LLM` | `True` | Template answers instead of a language model |
+
+## API reference
+
+Base URL: `http://localhost:8001`. In production, clients call the Gateway instead.
+
+### `GET /health`
+
+```json
 {
   "status": "healthy",
   "service": "eduarai-ai",
+  "version": "1.0.0",
   "database": "connected",
+  "cache": "disconnected",
   "rag_ready": true,
-  "scheduler_running": true
+  "scheduler_running": false,
+  "timestamp": "2026-10-04T10:00:00"
 }
 ```
 
-**Test 3: Database Connection**
-```bash
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "SELECT 1"
+`status` reports that the process is up; check `database`, `cache` and `rag_ready` for the real state.
 
-# Expected output:
-# (1 row) - meaning database connected
+### `POST /api/chat`
+
+Request:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `question` | string | yes | The student's question |
+| `user_id` | string | no | Generated if absent |
+| `session_id` | string | no | Generated if absent |
+| `module_id` | string | no | Only used in the reply text today |
+
+Response (measured, answer shortened):
+
+```json
+{
+  "answer": "Based on the curriculum:\n\n[DNA_BIOLOGY_001] # DNA CURRICULUM ...",
+  "is_on_topic": true,
+  "max_similarity": 0.5666,
+  "num_documents": 3,
+  "latency_ms": 570.2,
+  "decision_id": "42153e02-244a-44d0-b033-13dea1cda0df",
+  "cached": false
+}
 ```
 
-**Test 4: Redis Connection**
-```bash
-docker exec -it eduarai_redis redis-cli ping
+Off-topic questions return `is_on_topic: false`, `num_documents: 0` and a polite refusal. (An off-topic question has not yet been tested against the corrected retrieval query; see the checklist in [Roadmap](#roadmap).) The bandit action is logged on the server and a `decision_id` is returned; the action itself is not in this response.
 
-# Expected output:
-# PONG
+Errors return HTTP 500 with `{"detail": {"error": "...", "latency_ms": ...}}` (for example `Query encoding timeout`). A missing `question` returns HTTP 422 from Pydantic.
+
+### `GET /api/cache-stats` and `POST /api/cache-flush`
+
+`cache-stats` returns `hits`, `misses`, `errors`, `total`, `hit_rate` and `redis_status`. `cache-flush` clears the Redis database (testing only).
+
+### `WS /ws/adapt/{session_id}` (prototype)
+
+Send `{"question": "..."}`. The server runs retrieval, asks the bandit for an action using a **random** state vector, and replies with:
+
+```json
+{"answer": "...", "is_on_topic": true, "action": 2, "latency_ms": 120.5, "cached": false, "timestamp": "..."}
 ```
 
-**Test 5: Chat Endpoint**
-```bash
-curl -X POST http://localhost:8001/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question":"What is DNA?",
-    "user_id":"test-user",
-    "session_id":"test-session"
-  }'
-
-# Expected response (200 OK) with answer and metrics
-```
-
-### 🧪 Integration Tests
-
-**Run test suite:**
-```bash
-pytest tests/test_integration.py -v
-
-# Expected output:
-# test_rag_retrieval ... PASSED
-# test_bandit_action ... PASSED
-# test_database_query ... PASSED
-# test_api_health ... PASSED
-# test_chat_endpoint ... PASSED
-```
-
-### 📊 Performance Verification
-
-**Test Latencies:**
-
-```bash
-# Health check (<100ms)
-time curl http://localhost:8001/health
-
-# Chat endpoint (<500ms)
-time curl -X POST http://localhost:8001/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What is DNA?","user_id":"t","session_id":"t"}'
-
-# Expected:
-# health: ~50-80ms
-# chat: ~150-300ms
-```
-
-### 🔍 Logs Inspection
-
-**Check initialization:**
-```bash
-docker-compose logs ai-service --tail=30
-
-# Expected to see:
-# ✅ Embedding model loaded
-# ✅ Database connected
-# ✅ Redis connected
-# ✅ Scheduler started
-# ✅ API running on 0.0.0.0:8001
-```
-
-**Check for errors:**
-```bash
-docker-compose logs ai-service | grep -i "error"
-
-# Should return nothing (clean startup)
-```
-
----
-
-## Performance Targets
-
-### 🎯 SLA Requirements
-
-| Component | Target | Importance |
-|-----------|--------|------------|
-| **Chat Latency** | <500ms | CRITICAL |
-| **WebSocket Latency** | <150ms | CRITICAL |
-| **RAG Retrieval** | <45ms | HIGH |
-| **Bandit Decision** | <10ms | HIGH |
-| **API Startup** | <10s | MEDIUM |
-| **Health Check** | <100ms | MEDIUM |
-| **Container Build** | <30s | LOW |
-
-### 📈 Latency Breakdown (Chat Endpoint)
-
-```
-Request arrives
-↓ (0ms)
-Input validation
-↓ (~2ms)
-Embedding generation (RAG)
-↓ (~5ms) 
-Total so far: 7ms
-
-pgvector query (IVFFlat index)
-↓ (~20ms)
-Total so far: 27ms
-
-Similarity calculation
-↓ (~10ms)
-Total so far: 37ms
-
-Guardrail check & context formatting
-↓ (~15ms)
-Total so far: 52ms
+This does not yet follow the specification's frame (action token, `scene_name`, `target_object_id`, hint payload), does not read the learner state from Redis and does not update the bandit with a reward. It has not been tested end to end.
 
-Bandit state vector construction
-↓ (~3ms)
-Bandit decision (Thompson sampling)
-↓ (~5ms)
-Total so far: 60ms
+## How it works
 
-Response formatting & logging
-↓ (~20ms)
-Total so far: 80ms
+### Retrieval and guardrail
 
-Network transmission + JSON serialization
-↓ (~65ms)
-Total: ~145ms ✅ (well under 500ms SLA)
-```
+1. The question is encoded to a 384-dimensional vector with `all-MiniLM-L6-v2`. Encoding runs in a worker thread under `asyncio.wait_for(RAG_TIMEOUT)` so the event loop is never blocked.
+2. PostgreSQL ranks `document_chunks` by cosine distance and returns the top 3:
 
-### 🔄 Scheduler Performance
+   ```sql
+   SELECT chunk_id, module_id, content,
+          1 - (embedding <=> '[0.01, -0.23, ...]'::vector) AS similarity
+   FROM document_chunks
+   ORDER BY similarity DESC LIMIT 3;
+   ```
 
-**ETL Refresh Job (60s interval):**
-- Fetch new documents: ~5ms
-- Generate embeddings (batch): ~10ms
-- Upsert to pgvector: ~10ms
-- Refresh IVFFlat index: ~5ms
-- **Total: ~30ms** (runs in parallel with API requests)
+   `<=>` is pgvector's cosine distance, so `1 - distance` is the cosine similarity. The vector must be sent as a bracketed list string cast to `vector`. (An earlier version sent the raw bytes as hex, which made every query return zero documents.)
+3. Chunks with similarity below `RAG_THRESHOLD` (0.40) are dropped. If none remain, the question is off-topic.
+4. The remaining chunks are joined into a context string and returned as the answer (no language model yet).
 
-**Session State Update (30s interval):**
-- Get active sessions from Redis: ~2ms
-- Decay engagement scores: ~1ms per session
-- Update state vectors: ~3ms per session
-- Cache to Redis: ~2ms
-- **Total: <10ms** (minimal impact)
+The 0.40 threshold and top-3 come from the CTO specification. They have not yet been tuned on a labeled set.
 
----
+### Curriculum loading
 
-## Troubleshooting Guide
+`load_curriculum.py` reads `expanded_dna_curriculum.txt` (8,740 characters), cuts it into fixed 500-character windows (18 chunks, no overlap), embeds them in one batch and inserts them. It first inserts the parent row into `modules`, which the foreign key requires. Limitations: windows cut mid-word, and the corpus contains a duplicated section (two of the three chunks returned in one live test had identical text).
 
-### 🆘 Common Issues
+### Cache design (Redis, cache first)
 
-#### Issue 1: Containers Won't Start
+| Key pattern | Holds | TTL |
+|---|---|---|
+| `embedding:<text or md5>` | Query embedding | 1 hour |
+| `docs:<module or all>:<hash>` | Retrieved documents | 1 hour |
+| `context:<text or md5>` | Built context for a query | 30 minutes |
+| `session:{id}:state` (spec) | 8-D learner vector written by the ETL | 3600 s |
 
-**Symptom:** `docker-compose up -d` runs but containers exit immediately
+If Redis is unreachable, every cache call returns nothing and the request goes to PostgreSQL. This was observed in practice: chat kept working while the Redis connection was failing.
 
-**Diagnosis:**
-```bash
-docker-compose logs
+### Contextual bandit
 
-# Look for error messages indicating root cause
-```
+`bandit_service.py` implements an **epsilon-greedy** policy over 8 actions: with probability 0.15 it explores a random action; otherwise it picks the action with the highest mean reward (unvisited actions are tried first; ties are broken randomly). Rewards are clipped to [0, 1]. The 8-D state is validated (length must be 8) but is **not used in the score**, so today this is a multi-armed bandit baseline with a contextual interface. Statistics are kept in memory per worker process and reset on restart. The CTO specification describes a linear contextual policy (score = weights · state, with an incremental update); that is the planned upgrade.
 
-**Common Causes & Solutions:**
+Actions: `increase_difficulty`, `decrease_difficulty`, `maintain_difficulty`, `show_hint`, `hide_hint`, `suggest_quiz`, `suggest_ar_activity`, `switch_scene`.
 
-| Cause | Error Message | Solution |
-|-------|---------------|----------|
-| Invalid .env | `DB_PASSWORD not found` | Fill in .env with SE's credentials |
-| Port in use | `bind: address already in use :8001` | Change API_PORT in .env |
-| Docker daemon | `Cannot connect to Docker daemon` | Start Docker Desktop |
-| File missing | `No such file or directory` | Check all files copied to E:\Thesis\ |
+Learner state (specification definition, computed by the ETL from the `events` table): correct-answer rate, hints per session, current difficulty, AR engagement rate, content-skip rate, time in session, session count, recent quiz score (all scaled to 0-1). Earlier prototypes used a different 8-D layout; the specification's definition is the canonical one.
 
-**Resolution Steps:**
-```bash
-# 1. Check logs
-docker-compose logs
+### Scheduler / ETL (not active)
 
-# 2. Fix issue based on error
+`scheduler_service.py` defines an APScheduler job (every 60 s) guarded by a Redis lock. As written, it refreshes existing `session:*:state` keys in Redis (for example decaying engagement); it does **not** yet build the state vector from the `events` table as the specification requires. It is disabled in `main_service.py`.
 
-# 3. Restart
-docker-compose restart
+### Event logging (A.3) and ETL (A.4): not done
 
-# 4. Or full restart
-docker-compose down
-docker-compose up -d
-```
+SE's schema already contains an `events` table (see below). The first draft of `event_service.py` was written without checking that schema and **will fail as is**: `event_id` has no default, `scene_name` and `client_timestamp` are `NOT NULL`, `user_id` and `session_id` are UUID foreign keys, and the user and session rows must exist first. Confirm with SE who writes events (the specification has the Gateway log them), then either adapt the draft or read the table from the ETL.
 
-#### Issue 2: Database Connection Failed
+## Database schema
 
-**Symptom:** Chat endpoint returns 503 (database error)
+Owned by SE (`01_schema.sql`). Summary of the tables this service uses:
 
-**Diagnosis:**
-```bash
-docker-compose logs postgres
+| Table | Purpose | Key columns |
+|---|---|---|
+| `users` | Learner identity | `user_id` (UUID), `username`, `detail_level`, `language` |
+| `sessions` | One learning session | `session_id`, `user_id` (FK), `started_at`, `ended_at` |
+| `events` | Learner telemetry | `event_id`, `user_id` (FK), `session_id` (FK), `scene_name` (NOT NULL), `event_type`, `correct`, `time_spent_ms`, `payload` JSONB, client/server timestamps |
+| `modules` | Curriculum modules | `module_id`, `name`, `scene_name`, `cdn_bundle_url` (NOT NULL), `difficulty` |
+| `document_chunks` | RAG knowledge store | `chunk_id`, `module_id` (FK), `content`, `embedding vector(384)`, `created_at` |
 
-# Common patterns:
-# "FATAL: remaining connection slots reserved"
-# "role 'appuser' does not exist"
-# "database 'eduarai' does not exist"
-```
+`document_chunks` has an IVFFlat index (`vector_cosine_ops`, 100 lists). With 18 rows an exact scan is instant, so the index matters only at larger scale; it is best built after the data is loaded.
 
-**Check Configuration:**
-```bash
-# Verify .env has correct DB_PASSWORD
-grep DB_PASSWORD .env
+## Docker notes
 
-# Check DATABASE_URL format
-# Should be: postgresql+asyncpg://appuser:PASSWORD@eduarai_postgres:5432/eduarai
-```
+- **Containers:** `eduarai_postgres` (pgvector/pgvector:pg16), `eduarai_redis` (redis:7-alpine, password required), `eduarai_ai` (`eduarai-ai:latest`). All share the `thesis_default` network. The AI container is started with `docker run`; there is no compose override file in use.
+- **Image:** multi-stage build on `python:3.11-slim`; the builder installs dependencies, the final stage copies them plus each service file, and starts uvicorn with 4 workers on port 8001. Every Python file must have its own `COPY` line, otherwise the container crashes with `ModuleNotFoundError` (this happened with `cache_service.py`). Size on the development machine: about 9.7 GB on disk (3.3 GB content), because PyTorch is pulled in by sentence-transformers.
+- **Build time:** a full `--no-cache` build took roughly 13 to 37 minutes on the development laptop; the dependency install dominates.
+- **Four workers** means four copies of the embedding model in memory and four separate bandit states.
+- **Disk:** Docker Desktop's data disk and build cache can grow very large. Prefer environment variables for settings. For a single changed file, `docker cp main_service.py eduarai_ai:/app/` followed by `docker restart eduarai_ai` avoids a rebuild. `docker builder prune` reclaims build cache.
+- **Networking:** scripts run on Windows use `localhost` (ports are published). `host.docker.internal` did not resolve from Windows Python.
 
-**Manual Test:**
-```bash
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "SELECT 1"
+## Verified results
 
-# If fails: PostgreSQL not initialized yet (wait 30 seconds)
-# If succeeds: Check application connection string
-```
+Observed on the development machine (Windows 11, CPU only):
 
-**Recovery:**
-```bash
-# Restart PostgreSQL
-docker-compose restart postgres
+| Check | Result |
+|---|---|
+| PostgreSQL and Redis containers | Up and healthy |
+| `SELECT COUNT(*) FROM document_chunks` (module `DNA_BIOLOGY_001`) | 18 |
+| `GET /health` | HTTP 200, database connected, `rag_ready: true` (cache disconnected) |
+| `POST /api/chat` with "What is DNA?" | `is_on_topic: true`, `max_similarity: 0.5666`, `num_documents: 3`, 570 ms, `cached: false` |
+| Embedding model load at container start | about 25-35 seconds |
 
-# Wait for initialization
-sleep 30
+Not yet verified: off-topic rejection after the retrieval fix, a cache hit, WebSocket end to end, event insert and ETL, memory use, the specification's accuracy targets (top-3 hit rate, guardrail F1, bandit versus random), and the automated test suite.
 
-# Verify schema loaded
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "\dt"
-# Should show: document_chunks, sessions, users, modules, etc.
-```
+## Known issues
 
-#### Issue 3: Redis Connection Refused
-
-**Symptom:** `Connection refused: 127.0.0.1:6379`
-
-**Diagnosis:**
-```bash
-docker-compose logs redis
-
-# Check if password auth issue
-docker-compose logs ai-service | grep -i "redis"
-```
-
-**Check Redis:**
-```bash
-docker exec -it eduarai_redis redis-cli ping
-
-# If fails: Redis not accepting commands
-# Check REDIS_PASSWORD in .env matches container
-```
-
-**Verify Password:**
-```bash
-# Check what's in .env
-grep REDIS_PASSWORD .env
-
-# This must match what SE provided
-# If wrong, edit .env and restart
-docker-compose restart redis
-```
-
-#### Issue 4: RAG Not Working / No Documents Retrieved
-
-**Symptom:** `num_documents: 0` in chat response
-
-**Diagnosis:**
-```bash
-# Check document_chunks table
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "SELECT COUNT(*) FROM document_chunks"
-
-# Output: (0 rows) = no documents loaded
-
-# Or check if documents exist but not indexed
-docker-compose logs ai-service | grep -i "embedding"
-```
-
-**Solutions:**
-
-```bash
-# 1. Check if documents are in database
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "
-  SELECT id, chunk_text FROM document_chunks LIMIT 3;
-"
-
-# If no rows: Documents not yet loaded (SE task)
-# If rows exist: Embeddings might not be generated
-
-# 2. Trigger embedding generation
-# (Normally happens in ETL scheduler every 60s)
-
-# 3. Wait for scheduler to run
-# Check logs for: "ETL refresh: X embeddings generated"
-docker-compose logs scheduler | tail -20
-```
-
-#### Issue 5: API Responding Slowly (>500ms latency)
-
-**Symptom:** Chat endpoint takes 5+ seconds to respond
-
-**Diagnosis:**
-```bash
-# Check resource usage
-docker stats
-
-# Look for high CPU or memory in ai-service
-```
-
-**Common Causes:**
-
-| Cause | Fix |
-|-------|-----|
-| First request (model loading) | Expected, subsequent requests faster |
-| PostgreSQL slow query | Check: `docker-compose logs postgres \| grep "duration"` |
-| Redis blocked | Check: `docker exec eduarai_redis redis-cli` → `INFO` |
-| AI model reloading | Check logs for errors |
-| Network issue | Restart containers: `docker-compose restart` |
-
-**Performance Investigation:**
-```bash
-# Enable debug logging temporarily
-# Edit .env: DEBUG=True
-# Restart: docker-compose restart ai-service
-
-# Try chat request again
-curl -X POST http://localhost:8001/api/chat ...
-
-# Check detailed logs
-docker-compose logs ai-service
-
-# Look for timings:
-# "RAG retrieval: 45ms"
-# "Bandit decision: 5ms"
-# "Response formatting: 20ms"
-```
-
-#### Issue 6: .env Password Not Working
-
-**Symptom:** `Authentication failed` or `Invalid password`
-
-**Check Credentials:**
-```bash
-# Verify .env file
-notepad .env
-
-# Check:
-# 1. No accidental spaces
-# 2. Special characters properly escaped
-# 3. Not using "changeme" placeholders
-# 4. Matches what SE gave you exactly
-
-# Correct format (no quotes):
-DB_PASSWORD=Xk#9mL$2vP@5qR!8nO
-REDIS_PASSWORD=8Yz@4dT!6fJ&2hB$w
-
-# Incorrect format:
-DB_PASSWORD="Xk#9mL$2vP@5qR!8nO"  # Don't use quotes
-DB_PASSWORD=changeme              # Placeholder not real password
-```
-
-**Test Connection:**
-```bash
-# Test PostgreSQL
-docker exec -it eduarai_postgres psql -U appuser -d eduarai -c "SELECT 1"
-
-# Test Redis
-docker exec -it eduarai_redis redis-cli -a "YOUR_PASSWORD" ping
-
-# If either fails: password is wrong
-# Get correct password from SE and update .env
-```
-
-### 🔧 Advanced Troubleshooting
-
-**View All Logs:**
-```bash
-docker-compose logs -f --timestamps
-```
-
-**Enter Container Shell:**
-```bash
-# AI service
-docker exec -it eduarai_ai bash
-
-# PostgreSQL CLI
-docker exec -it eduarai_postgres psql -U appuser -d eduarai
-
-# Redis CLI
-docker exec -it eduarai_redis redis-cli
-```
-
-**Force Restart:**
-```bash
-# Full reset (WARNING: loses all data)
-docker-compose down -v
-docker-compose up -d
-```
-
-**Check System Resources:**
-```bash
-# Docker stats
-docker stats
-
-# Watch in real-time
-docker stats --no-stream=false
-```
-
----
-
-## Quick Reference
-
-### Most Common Commands
-
-```bash
-# Start everything
-docker-compose up -d
-
-# View status
-docker-compose ps
-
-# View logs
-docker-compose logs -f ai-service
-
-# Stop everything
-docker-compose down
-
-# Test health
-curl http://localhost:8001/health
-
-# Test chat
-curl -X POST http://localhost:8001/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Test?","user_id":"test","session_id":"test"}'
-
-# Enter container
-docker exec -it eduarai_ai bash
-
-# View configuration
-cat .env
-
-# Commit to git
-git add *.py docker* requirements.txt *.md .env.example
-git commit -m "Week 4: AI service"
-git push origin week4-postgres-integration
-```
-
-### Environment Variables Quick Reference
-
-```bash
-# Database
-DB_PASSWORD=<from_SE>
-POSTGRES_USER=appuser
-POSTGRES_DB=eduarai
-
-# Redis
-REDIS_PASSWORD=<from_SE>
-
-# API
-API_PORT=8001
-DEBUG=False
-
-# RAG
-RAG_THRESHOLD=0.40
-RAG_TOP_K=3
-
-# Bandit
-BANDIT_EPSILON=0.15
-BANDIT_STATE_DIM=8
-
-# Scheduler
-ETL_REFRESH_INTERVAL=60
-SESSION_STATE_TTL=14400
-```
-
-### Port Reference
-
-| Port | Service | URL |
-|------|---------|-----|
-| 5432 | PostgreSQL | localhost:5432 |
-| 6379 | Redis | localhost:6379 |
-| 8001 | AI API | http://localhost:8001 |
-
----
-
-## Next Steps
-
-### 🎯 Week 5 Roadmap
-
-**Immediate (This Week):**
-- [ ] Verify Docker stack stable for 24 hours
-- [ ] Run full integration test suite
-- [ ] Validate all SLA targets met
-- [ ] Complete code review checklist
-- [ ] Merge week4 to main branch
-
-**Soon (Next 2 Weeks):**
-- [ ] Start thesis writing (Week 4 implementation section)
-- [ ] Create defense presentation slides
-- [ ] Performance profiling & optimization
-- [ ] Load testing (100 concurrent users)
-- [ ] Security audit
-
-**Before Defense:**
-- [ ] All tests passing
-- [ ] Documentation reviewed
-- [ ] Git history clean
-- [ ] Performance validated
-- [ ] Slides polished
-
-### 📝 Thesis Checklist
-
-**Implementation (✅ Complete):**
-- ✅ RAG service (embedding + pgvector)
-- ✅ Contextual bandit (8 actions)
-- ✅ FastAPI microservice
-- ✅ Docker deployment
-- ✅ Integration testing
-
-**Documentation (⏳ In Progress):**
-- [ ] Write Week 4 section
-- [ ] Add diagrams/flowcharts
-- [ ] Include performance metrics
-- [ ] Document lessons learned
-
-**Presentation (⏳ Next):**
-- [ ] Overview slide
-- [ ] Architecture diagram
-- [ ] Demo video
-- [ ] Results/metrics
-- [ ] Q&A prep
-
-### 🚀 Deployment Checklist
-
-Before going live in production:
-
-- [ ] All containers healthy and stable
-- [ ] Performance targets verified
-- [ ] Load testing passed (>100 req/s)
-- [ ] Error handling tested
-- [ ] Logs properly configured
-- [ ] Backup strategy in place
-- [ ] Monitoring alerts set up
-- [ ] Documentation up-to-date
-- [ ] Security review complete
-- [ ] Team trained on operations
-
----
-
-## Summary
-
-### ✅ Week 4 Achievements
-
-| Objective | Status | Evidence |
-|-----------|--------|----------|
-| RAG Service | ✅ Complete | rag_service.py, tests passing |
-| Bandit Service | ✅ Complete | bandit_service.py, policy working |
-| FastAPI Microservice | ✅ Complete | main_service.py, endpoints responding |
-| Docker Integration | ✅ Complete | Dockerfile, docker-compose working |
-| Documentation | ✅ Complete | 5 guides + API reference |
-| Testing | ✅ Complete | Integration tests + examples |
-| Code Quality | ✅ Complete | 100% type hints, 0 garbage |
-| Performance Targets | ✅ Met | All SLAs verified |
-
-### 📊 Code Quality Metrics
-
-- **Lines of Code:** ~1,200 (production only)
-- **Type Hints:** 100% (all parameters and returns)
-- **Docstrings:** Comprehensive (IDE autocomplete ready)
-- **Test Coverage:** Integration tests + examples
-- **Error Handling:** At all critical points
-- **Logging:** Structured at INFO/DEBUG levels
-- **Dependencies:** Minimal and pinned versions
-- **Security:** Input validation + SQL injection prevention
-
-### 🎓 Knowledge Transfer
-
-**Documentation Provided:**
-1. ACTION_PLAN.md - 15-minute setup guide
-2. DOCKER_SETUP.md - Full Docker operations guide
-3. QUICK_REFERENCE.md - Daily command cheat sheet
-4. GIT_WORKFLOW.md - Team collaboration guide
-5. README_AI_SERVICE.md - API reference
-6. FINAL_SUMMARY.md - Week 4 overview
-7. This comprehensive report - Complete technical documentation
-
-**Ready for:**
-- ✅ Immediate deployment
-- ✅ Team handoff
-- ✅ Code review
-- ✅ Thesis defense preparation
-- ✅ Production use
-
----
-
-## Contact & Support
-
-**For Issues:**
-- Check DOCKER_SETUP.md troubleshooting section
-- Review logs: `docker-compose logs -f`
-- Check .env configuration
-- Verify SE's infrastructure is running
-
-**For Questions:**
-- API reference in README_AI_SERVICE.md
-- Architecture in this document
-- Git workflow in GIT_WORKFLOW.md
-
----
-
-**Report Generated:** 2026-09-19  
-**Status:** ✅ **PRODUCTION READY**  
-**Next Phase:** Week 5 (Thesis writing, defense prep)
-
----
-
-*This comprehensive report consolidates all Week 4 documentation and serves as the technical reference for the EduAR-AI AI microservice implementation.*
+| # | Issue | Fix |
+|---|---|---|
+| 1 | **Redis never connects.** `cache_service.py` ends with `CacheService(__name__)`, so the Redis URL is the string `"cache_service"`. Log: `Redis URL must specify one of the following schemes`. | `import config_prod as config` and `cache_service = CacheService(config.REDIS_URL)`. Keep `REDIS_HOST=eduarai_redis` (bare name). |
+| 2 | A cache hit returns the stored dict with `cached` saved as `False`. | In `build_context`, on a hit set `cached["cached"] = True` before returning. |
+| 3 | The `docs` cache key uses Python's `hash()`, which differs between worker processes, so hits are lost. | Use `hashlib.sha1(query_embedding.tobytes()).hexdigest()`. |
+| 4 | Startup logs "Redis cache connected" even when `connect()` failed. | Log based on `cache_service.client is not None`. |
+| 5 | WebSocket handler uses a random state, does not update the bandit and does not match the spec's frame. | Rework after the ETL provides state in Redis. |
+| 6 | Bandit ignores the state in its score; stats are per worker and in memory. | Linear contextual policy per the spec; persist weights. |
+| 7 | Corpus has a duplicated section; fixed 500-character windows cut mid-word. | Deduplicate, split on sentences with overlap, reload. |
+| 8 | Retrieval SQL is built with an f-string. | Use bound parameters. |
+| 9 | CORS is open (`*`) and the service has no authentication. | Restrict origins; rely on the Gateway for auth. |
+| 10 | `event_service.py` does not match SE's `events` schema. | See [Event logging](#event-logging-a3-and-etl-a4-not-done). |
+| 11 | `.venv` was committed in an earlier push. | Ignore and untrack it (see [Git workflow](#git-workflow)). |
+| 12 | `scheduler_service.py` ETL does not build state from events; it is disabled. | Implement per the spec, then re-enable. |
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `curl: Empty reply from server` | Container still loading the model, or workers crashed | Wait about 40 s; `docker logs eduarai_ai` |
+| `ModuleNotFoundError` in logs | A `.py` file has no `COPY` line in the Dockerfile | Add the line and rebuild, or `docker cp` the file and restart |
+| `Connection refused` to Postgres/Redis | Backing containers not running, or `localhost` used inside the container | `docker-compose up -d`; use container names and `--network thesis_default` |
+| `num_documents: 0` with data present | Embedding passed to pgvector in the wrong format | Use the bracketed-list cast shown in [How it works](#retrieval-and-guardrail) |
+| No documents at all | Volume was deleted, so the schema re-ran on an empty database | `python load_curriculum.py` |
+| `Query encoding timeout` | `RAG_TIMEOUT` too tight on CPU | Set `-e RAG_TIMEOUT=5.0` |
+| `'coroutine' object does not support the asynchronous context manager protocol` | `get_session()` returned a coroutine | Use the `@asynccontextmanager` version in `database_service.py` |
+| Password or URL errors with `#` | `#` starts a URL fragment | Write it as `%23` in URLs and in the container's password variables |
+| `pip install -r requirements.txt` fails with `UnicodeDecodeError` | Non-ASCII characters in `requirements.txt` on Windows | Keep the file ASCII only |
+| Docker commands fail | Docker Desktop not running | Start it, wait 60 s, run `docker ps` |
+| Image pull fails (registry DNS error) | Docker Hub unreachable | Retry later; keep images pulled before a demo |
+
+## Roadmap
+
+Do these in order; each produces evidence you can show.
+
+1. Fix the Redis connection and the cache flag/key (issues 1-4); confirm `/api/cache-stats` shows `redis_status: connected`.
+2. Off-topic test: ask an unrelated question (for example the capital of France) and confirm `is_on_topic: false`.
+3. Cache test: ask the same question twice; expect `cached: true` and lower latency on the second call. Record real latencies (median of 10 requests for miss and hit).
+4. Measure memory with `docker stats --no-stream` (the specification budget is 1.8 GB).
+5. Remove the duplicated chunk, reload the curriculum, and confirm the new chunk count.
+6. Event logging and ETL: align with SE's `events` schema, seed a user, session and events, build the 8-D state from events into `session:{id}:state`, then enable the scheduler.
+7. Rework the WebSocket handler to the spec's frame; read state from Redis; update the bandit with rewards.
+8. Linear contextual bandit and a simulation against a random baseline (specification target: at least 30 percent higher cumulative reward).
+9. Evaluation: 50 annotated questions for top-3 hit rate, 100 prompts (biology and adversarial) for guardrail precision, recall and F1; tune the threshold.
+10. Language-model answer generation (Phi-3-Mini or Mistral-7B class) over the retrieved context; replace the template.
+11. Re-run `test_integration.py`, add golden Q&A regression cases, and stress test at low concurrency.
+
+## Git workflow
+
+- Work on `AI_Code_Works`. SE's `data-layer` branch (compose file and schema) is locked: do not modify it.
+- Never commit `.env`. Commit `.env.example` with placeholders only. Do not paste real or realistic-looking passwords into any documentation.
+- `.venv` and `__pycache__` must not be tracked:
+
+  ```powershell
+  Add-Content .gitignore ".venv/`nvenv/`n.env`n__pycache__/"
+  git rm -r --cached .venv venv __pycache__ .env
+  git status          # confirm only intended files are staged
+  git commit -m "Remove virtual environment and secrets from tracking"
+  git push origin AI_Code_Works
+  ```
+
+  (`git rm --cached` reports an error for any path that is not tracked; remove that path from the command and run it again.) Afterwards run `git ls-files | findstr .env`. If `.env` was ever committed, treat its passwords as exposed and rotate them.
+
+## Team and references
+
+| Role | Owns |
+|---|---|
+| AI Engineer (Shabab) | This service: RAG, guardrail, bandit, cache layer, ETL design, curriculum ingestion, Docker image |
+| System Engineer | `docker-compose.yml`, PostgreSQL and Redis, `01_schema.sql`, Gateway, event logging |
+| Unity developer | AR scenes and execution of the 8 action tokens |
+| React Native developer | Mobile app, chat UI, bridge to Unity |
+
+References: the CTO specification for the AI Engineer role (RAG parameters, bandit actions, 8-D state, WebSocket protocol, test plan) and the thesis roadmap (A.1 model, A.2 dataset, A.3 data collection, A.4 ETL). Curriculum sources named in the corpus header: NCBI, OpenStax Biology, Khan Academy.
