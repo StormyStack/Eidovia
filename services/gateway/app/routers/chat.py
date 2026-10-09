@@ -18,6 +18,7 @@ from typing import Any, Optional
 
 from app.deps import CurrentUser, get_current_user
 from app import errors
+from app.logger_client import push_log_event
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,16 @@ async def chat(
         async with httpx.AsyncClient(timeout=AI_TIMEOUT) as client:
             response = await client.post(f"{AI_SERVICE_URL}/api/chat", json=payload)
             response.raise_for_status()
-            return ChatResponse(**response.json())
+            response_data = response.json()
+            
+            # Log the message sent event to Redis
+            await push_log_event(
+                "message_sent", 
+                current_user.user_id, 
+                {"question": body.question, "latency_ms": response_data.get("latency_ms")}
+            )
+            
+            return ChatResponse(**response_data)
     except httpx.TimeoutException:
         logger.warning("AI service timeout on /api/chat")
         raise errors.ai_service_unavailable()

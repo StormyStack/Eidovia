@@ -66,6 +66,11 @@ class Settings:
     host: str
     port: int
 
+    # Redis for logger
+    redis_host: str
+    redis_port: int
+    redis_password: str
+
     @property
     def database_url(self) -> str:
         escaped_user = quote_plus(self.database_user)
@@ -111,4 +116,7 @@ def get_settings() -> Settings:
         bcrypt_rounds=bcrypt_rounds,
         host=get_env("GATEWAY_HOST", "127.0.0.1"),
         port=int(get_env("GATEWAY_PORT", "8000")),
+        redis_host=get_env("REDIS_HOST", "eidovia_redis"),
+        redis_port=int(get_env("REDIS_PORT", "6379")),
+        redis_password=get_env("REDIS_PASSWORD", required=True),
     )

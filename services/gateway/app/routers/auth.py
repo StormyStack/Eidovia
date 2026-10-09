@@ -6,7 +6,7 @@ POST /api/auth/login     (PDF contract, exact)
 
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Depends
 from sqlalchemy.exc import IntegrityError
 
 from app import errors
@@ -14,6 +14,8 @@ from app import repositories as repo
 from app.db import db
 from app.schemas import AuthResponse, LoginRequest, ProfileSummary, RegisterRequest
 from app.security import burn_password_check, create_access_token, hash_password, verify_password
+from app.logger_client import push_log_event
+from app.deps import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ async def register(body: RegisterRequest) -> AuthResponse:
         raise
 
     logger.info(f"User registered: {user['user_id']}")
+    await push_log_event("register", str(user["user_id"]))
     return _auth_response(user["user_id"], user["detail_level"], user["language"])
 
 
@@ -72,4 +75,13 @@ async def login(body: LoginRequest) -> AuthResponse:
 
     user_id = str(user.user_id)
     logger.info(f"User logged in: {user_id}")
+    await push_log_event("login", user_id)
     return _auth_response(user_id, user.detail_level, user.language)
+
+@router.post("/logout")
+async def logout(current_user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Log out a user."""
+    # Since JWT is stateless, the client just drops the token. 
+    # This endpoint purely exists to log the logout event.
+    await push_log_event("logout", current_user.user_id)
+    return {"status": "logged_out"}

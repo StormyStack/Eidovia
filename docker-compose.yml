@@ -17,6 +17,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./services/ai/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./services/ai/migrations/002_events.sql:/docker-entrypoint-initdb.d/002_events.sql:ro
+      - ./services/ai/migrations/003_audit_logs.sql:/docker-entrypoint-initdb.d/003_audit_logs.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eidovia}"]
       interval: 5s
@@ -84,6 +85,27 @@ services:
       - AI_SERVICE_URL=http://ai-service:8001
     depends_on:
       postgres:
+        condition: service_healthy
+    networks:
+      - eidovia_network
+
+  logger:
+    build:
+      context: ./services/logger
+      dockerfile: Dockerfile
+    container_name: eidovia_logger
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - eidovia_network
