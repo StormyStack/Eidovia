@@ -44,7 +44,7 @@ class DatabaseService:
             connect_args={
                 "timeout": 5,
                 "command_timeout": 10,
-                "server_settings": {"application_name": "eduarai_gateway"},
+                "server_settings": {"application_name": "eidovia_gateway"},
             },
         )
         self.async_session_maker = async_sessionmaker(

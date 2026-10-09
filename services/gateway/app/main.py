@@ -1,5 +1,5 @@
 """
-EduAR-AI API Gateway (FastAPI :8000)
+Eidovia API Gateway (FastAPI :8000)
 Auth + user profile + module catalogue for the mobile app.
 Contract: docs/api-auth-home.md
 
@@ -47,7 +47,7 @@ async def _warn_if_not_migrated() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_settings()  # fail fast on missing/invalid JWT_SECRET or DB_PASSWORD
-    logger.info("EduAR-AI Gateway starting")
+    logger.info("Eidovia Gateway starting")
     await db.connect()
     await _warn_if_not_migrated()
     yield
@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI):
 # ============================================================
 
 app = FastAPI(
-    title="EduAR-AI API Gateway",
-    description="Auth, user profile and module catalogue for the EduAR-AI mobile app.",
+    title="Eidovia API Gateway",
+    description="Auth, user profile and module catalogue for the Eidovia mobile app.",
     version="0.1.0",
     lifespan=lifespan,
 )

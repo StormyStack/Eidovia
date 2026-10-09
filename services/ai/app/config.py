@@ -1,5 +1,5 @@
 """
-EduAR-AI Configuration Module
+Eidovia Configuration Module
 Handles environment variables, connection strings, and global constants.
 """
 
@@ -42,11 +42,11 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 # DATABASE CONFIGURATION
 # ============================================================
 
-DATABASE_HOST = get_env("DATABASE_HOST", "eduarai_postgres")
+DATABASE_HOST = get_env("DATABASE_HOST", "eidovia_postgres")
 DATABASE_PORT = get_env("DATABASE_PORT", "5432")
 DATABASE_USER = get_env("POSTGRES_USER", "appuser")
 DATABASE_PASSWORD = get_env("DB_PASSWORD", required=True)
-DATABASE_NAME = get_env("POSTGRES_DB", "eduarai")
+DATABASE_NAME = get_env("POSTGRES_DB", "eidovia")
 
 import urllib.parse
 
@@ -62,7 +62,7 @@ DB_ECHO = get_env("DB_ECHO", "False").lower() == "true"
 # REDIS CONFIGURATION
 # ============================================================
 
-REDIS_HOST = get_env("REDIS_HOST", "eduarai_redis")
+REDIS_HOST = get_env("REDIS_HOST", "eidovia_redis")
 REDIS_PORT = get_env("REDIS_PORT", "6379")
 REDIS_PASSWORD = get_env("REDIS_PASSWORD", required=True)
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))

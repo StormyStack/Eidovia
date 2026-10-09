@@ -1,5 +1,5 @@
 """
-Integration Tests for EduAR-AI Service
+Integration Tests for Eidovia Service
 Tests RAG, Bandit, and API endpoints with actual services.
 """
 

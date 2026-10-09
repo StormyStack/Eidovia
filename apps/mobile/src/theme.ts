@@ -65,7 +65,7 @@ export const shadow = {
 } as const;
 
 export const brand: { name: string; tagline: string; monogram: string; logo?: ImageSourcePropType } = {
-  name: 'EduAR-AI',
+  name: 'Eidovia',
   tagline: 'Learn biology in augmented reality',
   monogram: 'AR',
   logo: undefined, // e.g. require('../assets/logo.png') once the team has a logo

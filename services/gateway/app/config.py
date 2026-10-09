@@ -1,5 +1,5 @@
 """
-EduAR-AI Gateway Configuration
+Eidovia Gateway Configuration
 Reads settings from environment variables (and apps/gateway/.env if present).
 
 Database variable names are the SAME as the AI service's config_prod.py
@@ -98,11 +98,11 @@ def get_settings() -> Settings:
         raise ValueError("BCRYPT_ROUNDS must be between 4 and 15")
 
     return Settings(
-        database_host=get_env("DATABASE_HOST", "eduarai_postgres"),
+        database_host=get_env("DATABASE_HOST", "eidovia_postgres"),
         database_port=int(get_env("DATABASE_PORT", "5432")),
         database_user=get_env("POSTGRES_USER", "appuser"),
         database_password=get_env("DB_PASSWORD", required=True),
-        database_name=get_env("POSTGRES_DB", "eduarai"),
+        database_name=get_env("POSTGRES_DB", "eidovia"),
         db_pool_size=int(get_env("DB_POOL_SIZE", "5")),
         db_max_overflow=int(get_env("DB_MAX_OVERFLOW", "10")),
         jwt_secret=jwt_secret,

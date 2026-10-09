@@ -1,5 +1,5 @@
 """
-API Client Examples for EduAR-AI Service
+API Client Examples for Eidovia Service
 Demonstrates how to interact with Chat and WebSocket endpoints.
 """
 
@@ -259,7 +259,7 @@ async def example_concurrent_chats():
 async def main():
     """Run all examples."""
     print("\n" + "🎓 " * 35)
-    print("EduAR-AI Service - API Client Examples")
+    print("Eidovia Service - API Client Examples")
     print("🎓 " * 35)
     
     try:

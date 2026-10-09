@@ -1,4 +1,4 @@
--- EduAR-AI storage schema
+-- Eidovia storage schema
 -- Auto-executed once, on first container start (empty pgdata volume only).
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

@@ -1,5 +1,5 @@
 """
-Event Service for EduAR-AI
+Event Service for Eidovia
 Handles logging of learner interaction events.
 """
 

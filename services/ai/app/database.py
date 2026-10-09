@@ -48,7 +48,7 @@ class DatabaseService:
                     "timeout": 10,
                     "command_timeout": 10,
                     "server_settings": {
-                        "application_name": "eduarai_ai_service"
+                        "application_name": "eidovia_ai_service"
                     }
                 }
             )

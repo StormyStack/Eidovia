@@ -27,7 +27,7 @@ beforeEach(() => {
 
 it('renders the form with branding and a link to sign up', async () => {
   await renderScreen(LoginScreen, 'Login');
-  expect(screen.getByText('EduAR-AI')).toBeOnTheScreen();
+  expect(screen.getByText('Eidovia')).toBeOnTheScreen();
   expect(screen.getByLabelText('Username')).toBeOnTheScreen();
   expect(screen.getByLabelText('Password')).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Log in' })).toBeOnTheScreen();

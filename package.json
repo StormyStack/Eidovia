@@ -1,8 +1,8 @@
 {
-  "name": "eduar-ai",
+  "name": "eidovia",
   "version": "1.0.0",
   "private": true,
-  "description": "EduAR-AI monorepo root — scripts proxy into each app/service",
+  "description": "Eidovia monorepo root — scripts proxy into each app/service",
   "scripts": {
     "mobile":           "npm --prefix apps/mobile start",
     "mobile:go":        "npm --prefix apps/mobile run go",

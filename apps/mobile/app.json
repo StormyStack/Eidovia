@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "EduAR-AI",
-    "slug": "eduar-ai",
-    "scheme": "eduarai",
+    "name": "Eidovia",
+    "slug": "eidovia",
+    "scheme": "eidovia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eduarai.mobile"
+      "bundleIdentifier": "com.eidovia.mobile"
     },
     "android": {
-      "package": "com.eduarai.mobile",
+      "package": "com.eidovia.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

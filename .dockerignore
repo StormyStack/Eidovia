@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# EduAR-AI — Root .dockerignore
+# Eidovia — Root .dockerignore
 #
 # Applies to every `docker build` run from this repo root.
 # Goal: smallest possible build context → faster builds, no leaks.

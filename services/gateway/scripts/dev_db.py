@@ -32,7 +32,7 @@ DEVDB_DIR = local_pg.GATEWAY_DIR / ".devdb"
 DATA_DIR = DEVDB_DIR / "data"
 ENV_FILE = DEVDB_DIR / "gateway.env"
 LOG_FILE = DEVDB_DIR / "postgres.log"
-DB_NAME = "eduarai"
+DB_NAME = "eidovia"
 DEFAULT_PORT = 55432
 
 

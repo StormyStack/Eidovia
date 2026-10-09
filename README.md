@@ -1,263 +1,176 @@
-# EduAR-AI
+# Eidovia
 
-An augmented-reality mobile app for teaching biology, powered by adaptive AI tutoring.
+An augmented reality mobile app that teaches biology using adaptive AI.
+Students ask questions in a chat interface — the AI retrieves relevant content from a curriculum
+and gives personalized answers. AR scenes (Unity) bring the biology to life.
 
-> **Thesis project** — React Native (Expo) · FastAPI · PostgreSQL + pgvector · Redis · Docker
-
----
-
-## Architecture
-
-```
-┌─────────────────────┐     HTTP/JSON      ┌─────────────────────┐
-│   Mobile App        │ ◄─────────────────► │   API Gateway       │
-│   React Native      │                     │   FastAPI · port 8000│
-│   Expo SDK 57       │                     └──────────┬──────────┘
-└─────────────────────┘                               │
-                                                      │ asyncpg
-                                         ┌────────────▼────────────┐
-                                         │   PostgreSQL 16          │
-                                         │   users · modules        │
-                                         └─────────────────────────┘
-                                                      ▲
-                                          HTTP        │
-                                         ┌────────────┴────────────┐
-                                         │   AI Service            │
-                                         │   FastAPI · port 8001   │
-                                         │   RAG · Bandit · Redis  │
-                                         └─────────────────────────┘
-```
-
-| Layer | Path | Tech |
-|---|---|---|
-| Mobile App | `apps/mobile/` | React Native 0.86, Expo SDK 57, TypeScript |
-| API Gateway | `services/gateway/` | FastAPI, SQLAlchemy 2 async, asyncpg |
-| AI Service | `services/ai/` | FastAPI, pgvector, Redis 7, PyTorch |
+> Thesis project · React Native · FastAPI · PostgreSQL + pgvector · Redis · Docker
 
 ---
 
-## Repository Layout
+## How It Works
 
 ```
-Thesis/                              ← repo root
-├── .env                             (gitignored — real secrets)
-├── .env.example                     (committed — template)
-├── .gitignore
-├── .dockerignore
-├── docker-compose.yml               (orchestrates postgres, redis, ai-service)
-├── package.json                     (root scripts — proxies into apps/mobile)
-├── README.md
+ Phone (Expo Go)
+      │
+      │  REST / JSON
+      ▼
+ API Gateway  ──── PostgreSQL  (users, modules, auth)
+      │
+      │  HTTP
+      ▼
+ AI Service   ──── pgvector    (curriculum embeddings)
+              ──── Redis       (response cache)
+```
+
+1. The **mobile app** handles login, the module catalogue, and the chat screen.
+2. The **API Gateway** handles all auth (JWT), user profiles, and module data.
+3. The **AI Service** takes a student's question, finds the closest curriculum chunks using vector similarity, and returns an answer. Repeated questions are served from Redis cache (~4 ms vs ~300 ms cold).
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Mobile | React Native 0.86, Expo SDK 57, TypeScript |
+| API Gateway | Python, FastAPI, SQLAlchemy 2 async, asyncpg |
+| AI Service | Python, FastAPI, pgvector, sentence-transformers, Redis |
+| Database | PostgreSQL 16 with pgvector extension |
+| Cache | Redis 7 |
+| Runtime | Docker (all backend services run in containers) |
+
+---
+
+## Folder Structure
+
+```
+Thesis/
+├── docker-compose.yml        all 4 backend services
+├── .env                      secrets (never committed)
+├── .env.example              template — copy this to .env
 │
-├── services/                        ← all backend services
-│   ├── ai/                          ← AI microservice
-│   │   ├── app/                     ← Python package
-│   │   │   ├── main.py              FastAPI app, REST + WebSocket
-│   │   │   ├── config.py            Settings from root .env
-│   │   │   ├── database.py          Async SQLAlchemy engine
-│   │   │   ├── rag.py               RAG retrieval (pgvector)
-│   │   │   ├── cache.py             Redis cache service
-│   │   │   ├── bandit.py            Contextual bandit
-│   │   │   ├── scheduler.py         ETL background jobs
-│   │   │   └── events.py            Learner event logging
-│   │   ├── data/                    ← curriculum text files
-│   │   ├── migrations/              ← SQL schema files
-│   │   │   ├── 001_schema.sql
-│   │   │   └── 002_events.sql
-│   │   ├── scripts/                 ← one-off admin scripts
-│   │   │   ├── load_curriculum.py
-│   │   │   └── create_curriculum.py
-│   │   ├── tests/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── README.md
+├── services/
+│   ├── ai/                   AI microservice (port 8001)
+│   │   ├── app/              FastAPI app code
+│   │   ├── data/             curriculum text files
+│   │   ├── migrations/       SQL schema files
+│   │   └── scripts/          load_curriculum.py
 │   │
-│   └── gateway/                     ← API gateway
-│       ├── app/
-│       │   ├── main.py              FastAPI app, lifespan, /health
-│       │   ├── config.py            Settings from root .env
-│       │   ├── db.py                Async SQLAlchemy + session
-│       │   ├── security.py          bcrypt, JWT
-│       │   ├── deps.py              Bearer token dependency
-│       │   ├── errors.py            Error contract format
-│       │   ├── schemas.py           Pydantic models
-│       │   ├── repositories.py      All SQL queries
-│       │   └── routers/             auth, users, modules, chat
-│       ├── migrations/
-│       ├── scripts/
-│       ├── tests/
-│       ├── requirements.txt
-│       └── README.md
+│   └── gateway/              API gateway (port 8000)
+│       ├── app/              FastAPI app code
+│       ├── migrations/       SQL schema files
+│       └── scripts/          setup_db.py
 │
-└── apps/                            ← frontend / client apps
-    └── mobile/                      ← React Native app
+└── apps/
+    └── mobile/               React Native app (Expo)
         ├── src/
-        │   ├── App.tsx
-        │   ├── config.ts
-        │   ├── theme.ts
-        │   ├── components/
-        │   ├── navigation/
-        │   ├── screens/
-        │   ├── services/
-        │   ├── store/
-        │   ├── utils/
-        │   └── test-utils/
-        ├── .env                     (Expo-only — EXPO_PUBLIC_* must live here)
-        ├── app.json
-        ├── package.json
-        ├── tsconfig.json
-        └── README.md
+        └── .env              EXPO_PUBLIC_API_URL only
 ```
 
 ---
 
 ## Prerequisites
 
-| Tool | Version |
+| Tool | Notes |
 |---|---|
-| Python | 3.11+ |
-| Node.js | 18+ |
-| Docker Desktop | latest (running) |
-| Expo Go | SDK 57 (on your phone) |
+| Docker Desktop | Must be running |
+| Node.js 18+ | For the mobile app |
+| Expo Go | Install on your phone (SDK 57) |
+
+No local Python needed — all backend runs inside Docker.
 
 ---
 
-## Environment Setup
+## First-Time Setup
 
-All secrets live in **one** file at the repo root:
+**Step 1 — Create your secrets file**
 
 ```powershell
 Copy-Item .env.example .env
-notepad .env          # fill in the values below
+notepad .env
 ```
 
-**Required values to set:**
+Fill in these 4 values:
 
-| Variable | Used by | Notes |
-|---|---|---|
-| `DB_PASSWORD` | AI, Gateway | PostgreSQL password |
-| `REDIS_PASSWORD` | AI | Redis password |
-| `JWT_SECRET` | Gateway | ≥ 32 chars — generate with: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| `EXPO_PUBLIC_API_URL` | Mobile app | Your PC's LAN IP, e.g. `http://192.168.1.10:8000` |
+| Variable | What to put |
+|---|---|
+| `DB_PASSWORD` | Any strong password |
+| `REDIS_PASSWORD` | Any strong password |
+| `JWT_SECRET` | Random string ≥ 32 chars. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `EXPO_PUBLIC_API_URL` | `http://<YOUR-PC-LAN-IP>:8000` — find your IP with `ipconfig` |
 
-> ⚠ Port `5432` is blocked by Windows Hyper-V on this machine. The `.env` uses `DATABASE_PORT=6543` as the host-side mapping — do not change it.
-
-The `apps/mobile/.env` file still exists because **Expo requires `EXPO_PUBLIC_*` variables to sit next to `package.json`**. It contains only that one variable; everything else is in the root `.env`.
-
----
-
-## Quick Start
-
-### 1 — AI Service
+**Step 2 — Start all backend services**
 
 ```powershell
-docker-compose up -d --build      # starts PostgreSQL, Redis, AI service
-# First build: 15–40 min (PyTorch download). Subsequent starts are instant.
-
-docker-compose ps                 # wait until all 3 containers are healthy
-
-# Load curriculum (first time only)
-cd services\ai
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python scripts\load_curriculum.py
-
-# Verify
-curl http://localhost:8001/health
+docker compose up -d --build
 ```
 
-### 2 — API Gateway
+This starts PostgreSQL, Redis, the AI service, and the API Gateway. First build takes a few minutes (downloads PyTorch). Subsequent starts are instant.
+
+**Step 3 — Seed the database** *(one time only)*
 
 ```powershell
-cd services\gateway
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-python -m scripts.setup_db        # apply migrations + seed modules & demo user
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-curl http://localhost:8000/health
+docker exec -i eidovia_gateway python -m scripts.setup_db
 ```
 
-### 3 — Mobile App
+Creates tables, loads the module catalogue, and adds a demo user.
+
+**Step 4 — Load the biology curriculum** *(one time only)*
+
+```powershell
+docker exec -it eidovia_ai python -m scripts.load_curriculum
+```
+
+Converts the curriculum text into vector embeddings stored in PostgreSQL. Takes ~30 seconds.
+
+**Step 5 — Run the mobile app**
 
 ```powershell
 cd apps\mobile
 npm install
+# Confirm apps\mobile\.env has: EXPO_PUBLIC_API_URL=http://<YOUR-PC-LAN-IP>:8000
 
-# Set EXPO_PUBLIC_API_URL in apps\mobile\.env to your PC's LAN IP
-notepad .env
+$env:REACT_NATIVE_PACKAGER_HOSTNAME = "<YOUR-PC-LAN-IP>"
+npx expo start --go --clear
+```
 
-$env:REACT_NATIVE_PACKAGER_HOSTNAME = "<PC-LAN-IP>"
-npx expo start --go --clear       # scan QR with Expo Go on your phone
+Scan the QR code with **Expo Go** on your phone. Phone must be on the same Wi-Fi as your PC.
+
+---
+
+## Day-to-Day Start
+
+```powershell
+# Backend (from repo root)
+docker compose up -d
+
+# Mobile
+cd apps\mobile
+npx expo start --go --clear
 ```
 
 ---
 
 ## Ports
 
-| Service | Host Port | Notes |
+| Service | Port | URL |
 |---|---|---|
-| API Gateway | `8000` | REST + JWT auth |
-| AI Service | `8001` | REST + WebSocket |
-| PostgreSQL | `6543` | Host-side (container still uses 5432 internally) |
-| Redis | `6379` | |
+| API Gateway | `8000` | http://localhost:8000/docs |
+| AI Service | `8001` | http://localhost:8001/health |
+| PostgreSQL | `6543` (host) | — |
+| Redis | `6379` | — |
+
+> Port `5432` is blocked by Windows Hyper-V — that's why PostgreSQL maps to `6543` on the host.
+> Inside Docker, containers still talk to each other on `5432`.
 
 ---
 
-## API Overview
-
-### Gateway (`localhost:8000`)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/api/auth/register` | — | Create account |
-| POST | `/api/auth/login` | — | Get JWT |
-| GET | `/api/users/{id}/profile` | Bearer | User profile |
-| GET | `/api/modules` | Bearer | Module list |
-| GET | `/api/modules/{id}/config` | Bearer | Module config for AR |
-| GET | `/health` | — | Liveness + DB status |
-
-> Interactive docs: `http://127.0.0.1:8000/docs`
-
-### AI Service (`localhost:8001`)
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Service health |
-| POST | `/api/chat` | RAG-based biology Q&A |
-| GET | `/api/cache-stats` | Redis hit/miss stats |
-| POST | `/api/cache-flush` | Clear Redis cache |
-| WS | `/ws/adapt/{session_id}` | Adaptive learning (prototype) |
-
----
-
-## Running Tests
+## Stop Everything
 
 ```powershell
-# Gateway (pytest — spins up a throwaway PostgreSQL)
-cd services\gateway
-python -m pytest -v
-
-# Mobile app (Jest)
-cd apps\mobile
-npm test
-npm test -- --coverage
-npx tsc --noEmit
+docker compose down
 ```
-
----
-
-## `EXPO_PUBLIC_API_URL` Cheat Sheet
-
-| Where the app runs | Value |
-|---|---|
-| Physical phone (same Wi-Fi) | `http://<PC-LAN-IP>:8000` |
-| Android emulator | `http://10.0.2.2:8000` |
-| iOS Simulator (macOS) | `http://localhost:8000` |
-
-After editing `apps/mobile/.env`, restart Metro: `npx expo start --clear`
 
 ---
 
@@ -265,18 +178,16 @@ After editing `apps/mobile/.env`, restart Metro: `npx expo start --clear`
 
 | Problem | Fix |
 |---|---|
-| `bind: access denied` on port 5432/5433 | Windows Hyper-V blocks those ports. Use `DATABASE_PORT=6543` |
-| `No module named 'greenlet'` | Use `SQLAlchemy[asyncio]` in `requirements.txt` (already fixed) |
-| `Query encoding timeout` | Set `RAG_TIMEOUT=5.0` in `.env` |
-| Container still loading | Wait 40 s after `docker-compose up`; `docker logs eduarai_ai --tail 30` |
-| No documents returned from RAG | Run `python scripts\load_curriculum.py` inside `services\ai\` |
-| QR code opens wrong IP | Set `REACT_NATIVE_PACKAGER_HOSTNAME=<PC-LAN-IP>` before `expo start` |
-| 401 errors from app | Check `EXPO_PUBLIC_API_URL` points to the gateway, not AI service |
+| `bind: access denied` on port 5432 | Expected on Windows. Already handled — host port is `6543`. |
+| Container won't start | Check logs: `docker logs eidovia_ai --tail 50` |
+| Chat returns no results | Re-run: `docker exec -it eidovia_ai python -m scripts.load_curriculum` |
+| Phone can't reach the backend | Check Wi-Fi — phone and PC must be on the same network. Set Windows network to **Private**. |
+| QR code shows wrong IP | Set `$env:REACT_NATIVE_PACKAGER_HOSTNAME` to your actual LAN IP before running Expo. |
 
 ---
 
-## Detailed Docs
+## Service Docs
 
-- [AI Service →](services/ai/README.md)
-- [API Gateway →](services/gateway/README.md)
-- [Mobile App →](apps/mobile/README.md)
+- [AI Service](services/ai/README.md)
+- [API Gateway](services/gateway/README.md)
+- [Mobile App](apps/mobile/README.md)

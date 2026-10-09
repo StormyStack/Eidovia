@@ -1,5 +1,5 @@
 """
-EduAR-AI Main Service (Cache-First Architecture)
+Eidovia Main Service (Cache-First Architecture)
 FastAPI microservice with RAG + Contextual Bandit + Redis Cache
 Provides REST (/chat) and WebSocket (/ws/adapt/{session_id}) endpoints.
 
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 app = FastAPI(
-    title="EduAR-AI Service",
+    title="Eidovia Service",
     description="Adaptive learning with RAG + Contextual Bandit + Redis Cache",
     version="1.0.0"
 )
@@ -93,7 +93,7 @@ class CacheStatsResponse(BaseModel):
 async def startup():
     """Initialize services on startup."""
     logger.info("=" * 70)
-    logger.info("🚀 EduAR-AI SERVICE STARTUP (Cache-First)")
+    logger.info("🚀 Eidovia SERVICE STARTUP (Cache-First)")
     logger.info("=" * 70)
     
     try:
@@ -150,7 +150,7 @@ async def health_check():
     """System health check."""
     return {
         "status": "healthy",
-        "service": "eduarai-ai",
+        "service": "eidovia-ai",
         "version": "1.0.0",
         "database": "connected" if db.is_healthy else "disconnected",
         "cache": "connected" if cache_service.client else "disconnected",
@@ -453,7 +453,7 @@ async def log_event(event: EventRequest):
 async def root():
     """Root endpoint with service info."""
     return {
-        "service": "EduAR-AI",
+        "service": "Eidovia",
         "version": "1.0.0",
         "endpoints": {
             "health": "/health",

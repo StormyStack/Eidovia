@@ -1,4 +1,4 @@
-# EduAR-AI API Gateway
+# Eidovia API Gateway
 # Pins match the root requirements.txt where the packages overlap, so one venv serves both.
 
 # Runtime

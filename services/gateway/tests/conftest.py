@@ -16,7 +16,7 @@ import pytest
 
 from scripts import local_pg
 
-TEST_DB = "eduarai_gateway_test"
+TEST_DB = "eidovia_gateway_test"
 
 
 def base_schema_sql() -> str:
