@@ -56,7 +56,7 @@ async def process_logs():
     while True:
         try:
             # BLPOP blocks until a message is available
-            result = await r.blpop("raw_audit_logs", timeout=0)
+            result = await r.blpop("raw_audit_logs", timeout=5)
             if not result:
                 continue
 
@@ -67,6 +67,7 @@ async def process_logs():
             # We filter/transform the log before saving.
             action = event.get("action")
             user_id = event.get("user_id")
+            username = event.get("username", "unknown")
             details = event.get("details", {})
             timestamp_str = event.get("timestamp")
             
@@ -87,12 +88,22 @@ async def process_logs():
             try:
                 await conn.execute(
                     """
-                    INSERT INTO audit_logs (user_id, action, details, created_at)
-                    VALUES ($1, $2, $3::jsonb, $4)
+                    INSERT INTO audit_logs (user_id, username, action, details, created_at)
+                    VALUES ($1, $2, $3, $4::jsonb, $5)
                     """,
-                    user_id, action, details_json, created_at
+                    user_id, username, action, details_json, created_at
                 )
-                logger.info(f"Processed and saved log: {action} for user {user_id}")
+                
+                # Publish to realtime_logs channel for the admin dashboard
+                await r.publish("realtime_logs", json.dumps({
+                    "user_id": user_id,
+                    "username": username,
+                    "action": action,
+                    "details": details,
+                    "created_at": created_at.isoformat()
+                }))
+                
+                logger.info(f"Processed and saved log: {action} for user {username}")
             except asyncpg.exceptions.UndefinedTableError:
                 logger.error("audit_logs table does not exist! Waiting for migrations...")
                 await asyncio.sleep(5)

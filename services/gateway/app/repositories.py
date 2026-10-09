@@ -54,7 +54,7 @@ async def get_user_for_login(session: AsyncSession, username: str) -> Optional[A
     """
     result = await session.execute(
         text("""
-            SELECT user_id, username, password_hash, detail_level, language
+            SELECT user_id, username, password_hash, detail_level, language, is_admin
             FROM users
             WHERE lower(username) = lower(:username)
         """),
@@ -78,7 +78,7 @@ async def user_exists(session: AsyncSession, user_id: str) -> bool:
 async def get_user_profile(session: AsyncSession, user_id: str) -> Optional[dict[str, Any]]:
     result = await session.execute(
         text("""
-            SELECT user_id, username, email, detail_level, language, created_at
+            SELECT user_id, username, email, detail_level, language, is_admin, created_at
             FROM users
             WHERE user_id = :user_id
         """),
@@ -93,6 +93,7 @@ async def get_user_profile(session: AsyncSession, user_id: str) -> Optional[dict
         "email": row.email,
         "detail_level": row.detail_level,
         "language": row.language,
+        "is_admin": row.is_admin,
         "created_at": row.created_at.isoformat() if row.created_at else "",
     }
 

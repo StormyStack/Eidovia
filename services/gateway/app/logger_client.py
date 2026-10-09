@@ -21,15 +21,20 @@ async def get_redis():
         )
     return _redis_pool
 
-async def push_log_event(action: str, user_id: str, details: dict = None):
+async def push_log_event(action: str, user_id: str, username: str, is_admin: bool, details: dict = None):
     """
     Pushes a raw log event to Redis for the logger service to process.
+    Skips logging if the user is an admin.
     """
+    if is_admin:
+        return
+
     try:
         r = await get_redis()
         event = {
             "action": action,
             "user_id": user_id,
+            "username": username,
             "details": details or {},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }

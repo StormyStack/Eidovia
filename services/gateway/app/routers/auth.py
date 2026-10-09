@@ -56,9 +56,10 @@ async def register(body: RegisterRequest) -> AuthResponse:
         raise
 
     logger.info(f"User registered: {user['user_id']}")
-    await push_log_event("register", str(user["user_id"]))
+    # user dictionary only has user_id, detail_level, language. We need username from body.
+    # is_admin is False for normal registration.
+    await push_log_event("register", str(user["user_id"]), body.username, False)
     return _auth_response(user["user_id"], user["detail_level"], user["language"])
-
 
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest) -> AuthResponse:
@@ -75,7 +76,7 @@ async def login(body: LoginRequest) -> AuthResponse:
 
     user_id = str(user.user_id)
     logger.info(f"User logged in: {user_id}")
-    await push_log_event("login", user_id)
+    await push_log_event("login", user_id, user.username, bool(user.is_admin))
     return _auth_response(user_id, user.detail_level, user.language)
 
 @router.post("/logout")
@@ -83,5 +84,5 @@ async def logout(current_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Log out a user."""
     # Since JWT is stateless, the client just drops the token. 
     # This endpoint purely exists to log the logout event.
-    await push_log_event("logout", current_user.user_id)
+    await push_log_event("logout", current_user.user_id, current_user.username, current_user.is_admin)
     return {"status": "logged_out"}

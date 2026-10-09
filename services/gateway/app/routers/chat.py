@@ -91,6 +91,8 @@ async def chat(
             await push_log_event(
                 "message_sent", 
                 current_user.user_id, 
+                current_user.username,
+                current_user.is_admin,
                 {"question": body.question, "latency_ms": response_data.get("latency_ms")}
             )
             

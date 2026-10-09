@@ -22,7 +22,8 @@ bearer_scheme = HTTPBearer(auto_error=False, description="JWT from POST /api/aut
 @dataclass(frozen=True)
 class CurrentUser:
     user_id: str
-
+    username: str
+    is_admin: bool
 
 async def get_current_user(
     request: Request,
@@ -45,9 +46,10 @@ async def get_current_user(
 
     user_id = decode_access_token(token)
 
-    # A valid token for a deleted account must not keep working
+    # Fetch user profile to get is_admin flag
     async with db.get_session() as session:
-        if not await repo.user_exists(session, user_id):
+        profile = await repo.get_user_profile(session, user_id)
+        if not profile:
             raise token_invalid()
 
-    return CurrentUser(user_id=user_id)
+    return CurrentUser(user_id=user_id, username=profile.get("username"), is_admin=bool(profile.get("is_admin")))

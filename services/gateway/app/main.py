@@ -67,10 +67,13 @@ app = FastAPI(
 )
 
 register_error_handlers(app)
+from admin.routes import router as admin_router
+
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(modules.router)
 app.include_router(chat.router)
+app.include_router(admin_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])
