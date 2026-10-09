@@ -5,11 +5,14 @@ Handles environment variables, connection strings, and global constants.
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load the unified root .env  (Thesis/.env), two directories up from AI/config_prod.py
+_ROOT_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=_ROOT_ENV, override=False)
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,70 @@
+# ═══════════════════════════════════════════════════════════════
+# EduAR-AI — Unified Root .gitignore
+# Covers: AI service (Python), Mobile/gateway (Python/FastAPI),
+#         Mobile/app (React Native / Expo)
+# ═══════════════════════════════════════════════════════════════
+
+# ─── Secrets & environment ─────────────────────────────────────
+.env
+.env*.local
+
+# ─── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+*.so
+
+# ─── Node / JavaScript ─────────────────────────────────────────
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# ─── Expo / React Native ───────────────────────────────────────
+.expo/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+
+# Generated native folders (Expo managed workflow)
+Mobile/app/ios/
+Mobile/app/android/
+
+# ─── Mobile signing & certificates ────────────────────────────
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+*.orig.*
+
+# ─── Kotlin build ─────────────────────────────────────────────
+.kotlin/
+
+# ─── Local dev database (scripts/dev_db.py) ───────────────────
+.devdb/
+
+# ─── Test coverage ────────────────────────────────────────────
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+
+# ─── OS / Editor ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml

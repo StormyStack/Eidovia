@@ -17,7 +17,9 @@ from dotenv import load_dotenv
 from urllib.parse import quote_plus
 
 GATEWAY_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_ENV_FILE = GATEWAY_ROOT / ".env"
+# Unified root .env lives at Thesis/.env — three directories above this file.
+# Set the GATEWAY_ENV_FILE env-var to override (e.g. in CI or Docker).
+DEFAULT_ENV_FILE = GATEWAY_ROOT.parent.parent / ".env"
 
 MIN_JWT_SECRET_LENGTH = 32
 
