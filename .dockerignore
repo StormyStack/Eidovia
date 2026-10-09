@@ -1,0 +1,79 @@
+# ═══════════════════════════════════════════════════════════════
+# EduAR-AI — Root .dockerignore
+#
+# Applies to every `docker build` run from this repo root.
+# Goal: smallest possible build context → faster builds, no leaks.
+# ═══════════════════════════════════════════════════════════════
+
+# ─── Secrets — never in an image ───────────────────────────────
+.env
+.env.*
+!.env.example           # keep the template (no real values)
+
+# ─── Version control ───────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ─── CI/CD configs (not needed at runtime) ─────────────────────
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# ─── Python build/cache artefacts ──────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+.Python
+build/
+dist/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+MANIFEST
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+# ─── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Test & coverage ───────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+.tox/
+tests/
+
+# ─── Node / Expo (not needed in Python images) ─────────────────
+node_modules/
+Mobile/
+
+# ─── Editors & OS ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Docker files themselves (no recursion) ────────────────────
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# ─── Docs & markdown ───────────────────────────────────────────
+*.md
+docs/
+
+# ─── Local dev artefacts ───────────────────────────────────────
+.devdb/
+*.log

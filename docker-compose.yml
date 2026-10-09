@@ -1,3 +1,7 @@
+# docker-compose.yml — run from repo root (Thesis/)
+# Orchestrates: PostgreSQL, Redis, AI service
+# Gateway runs locally (uvicorn) for hot-reload during dev
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -8,10 +12,11 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-eduarai}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-6543}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./services/ai/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+      - ./services/ai/migrations/002_events.sql:/docker-entrypoint-initdb.d/002_events.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eduarai}"]
       interval: 5s
@@ -42,16 +47,16 @@ services:
 
   ai-service:
     build:
-      context: .
+      context: ./services/ai     # Dockerfile lives in services/ai/
       dockerfile: Dockerfile
     container_name: eduarai_ai
     restart: unless-stopped
     ports:
       - "${API_PORT:-8001}:8001"
     env_file:
-      - .env
+      - .env                     # root .env — single source of truth
     environment:
-      - DATABASE_HOST=postgres
+      - DATABASE_HOST=postgres   # override to use Docker service name
       - REDIS_HOST=redis
     depends_on:
       postgres:

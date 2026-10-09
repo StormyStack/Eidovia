@@ -30,34 +30,82 @@ An augmented-reality mobile app for teaching biology, powered by adaptive AI tut
 
 | Layer | Path | Tech |
 |---|---|---|
-| Mobile App | `Mobile/app/` | React Native 0.86, Expo SDK 57, TypeScript |
-| API Gateway | `Mobile/gateway/` | FastAPI, SQLAlchemy 2 async, asyncpg |
-| AI Service | `AI/` | FastAPI, pgvector, Redis 7, PyTorch |
+| Mobile App | `apps/mobile/` | React Native 0.86, Expo SDK 57, TypeScript |
+| API Gateway | `services/gateway/` | FastAPI, SQLAlchemy 2 async, asyncpg |
+| AI Service | `services/ai/` | FastAPI, pgvector, Redis 7, PyTorch |
 
 ---
 
 ## Repository Layout
 
 ```
-Thesis/
-├── .env                  ← unified secrets (never commit)
-├── .env.example          ← template (safe to commit)
+Thesis/                              ← repo root
+├── .env                             (gitignored — real secrets)
+├── .env.example                     (committed — template)
 ├── .gitignore
-├── AI/                   ← AI microservice
-│   ├── config_prod.py
-│   ├── docker-compose.yml
-│   ├── requirements.txt
-│   └── README.md         ← AI-specific deep-dive
-└── Mobile/
-    ├── gateway/          ← API gateway
-    │   ├── app/
-    │   ├── tests/
-    │   ├── requirements.txt
-    │   └── README.md     ← gateway deep-dive
-    └── app/              ← React Native app
+├── .dockerignore
+├── docker-compose.yml               (orchestrates postgres, redis, ai-service)
+├── package.json                     (root scripts — proxies into apps/mobile)
+├── README.md
+│
+├── services/                        ← all backend services
+│   ├── ai/                          ← AI microservice
+│   │   ├── app/                     ← Python package
+│   │   │   ├── main.py              FastAPI app, REST + WebSocket
+│   │   │   ├── config.py            Settings from root .env
+│   │   │   ├── database.py          Async SQLAlchemy engine
+│   │   │   ├── rag.py               RAG retrieval (pgvector)
+│   │   │   ├── cache.py             Redis cache service
+│   │   │   ├── bandit.py            Contextual bandit
+│   │   │   ├── scheduler.py         ETL background jobs
+│   │   │   └── events.py            Learner event logging
+│   │   ├── data/                    ← curriculum text files
+│   │   ├── migrations/              ← SQL schema files
+│   │   │   ├── 001_schema.sql
+│   │   │   └── 002_events.sql
+│   │   ├── scripts/                 ← one-off admin scripts
+│   │   │   ├── load_curriculum.py
+│   │   │   └── create_curriculum.py
+│   │   ├── tests/
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── README.md
+│   │
+│   └── gateway/                     ← API gateway
+│       ├── app/
+│       │   ├── main.py              FastAPI app, lifespan, /health
+│       │   ├── config.py            Settings from root .env
+│       │   ├── db.py                Async SQLAlchemy + session
+│       │   ├── security.py          bcrypt, JWT
+│       │   ├── deps.py              Bearer token dependency
+│       │   ├── errors.py            Error contract format
+│       │   ├── schemas.py           Pydantic models
+│       │   ├── repositories.py      All SQL queries
+│       │   └── routers/             auth, users, modules, chat
+│       ├── migrations/
+│       ├── scripts/
+│       ├── tests/
+│       ├── requirements.txt
+│       └── README.md
+│
+└── apps/                            ← frontend / client apps
+    └── mobile/                      ← React Native app
         ├── src/
-        ├── .env          ← Expo-only (EXPO_PUBLIC_* must live here)
-        └── README.md     ← app deep-dive
+        │   ├── App.tsx
+        │   ├── config.ts
+        │   ├── theme.ts
+        │   ├── components/
+        │   ├── navigation/
+        │   ├── screens/
+        │   ├── services/
+        │   ├── store/
+        │   ├── utils/
+        │   └── test-utils/
+        ├── .env                     (Expo-only — EXPO_PUBLIC_* must live here)
+        ├── app.json
+        ├── package.json
+        ├── tsconfig.json
+        └── README.md
 ```
 
 ---
@@ -93,7 +141,7 @@ notepad .env          # fill in the values below
 
 > ⚠ Port `5432` is blocked by Windows Hyper-V on this machine. The `.env` uses `DATABASE_PORT=6543` as the host-side mapping — do not change it.
 
-The `Mobile/app/.env` file still exists because **Expo requires `EXPO_PUBLIC_*` variables to sit next to `package.json`**. It contains only that one variable; everything else is in the root `.env`.
+The `apps/mobile/.env` file still exists because **Expo requires `EXPO_PUBLIC_*` variables to sit next to `package.json`**. It contains only that one variable; everything else is in the root `.env`.
 
 ---
 
@@ -102,17 +150,17 @@ The `Mobile/app/.env` file still exists because **Expo requires `EXPO_PUBLIC_*` 
 ### 1 — AI Service
 
 ```powershell
-cd AI
 docker-compose up -d --build      # starts PostgreSQL, Redis, AI service
 # First build: 15–40 min (PyTorch download). Subsequent starts are instant.
 
 docker-compose ps                 # wait until all 3 containers are healthy
 
 # Load curriculum (first time only)
+cd services\ai
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python load_curriculum.py
+python scripts\load_curriculum.py
 
 # Verify
 curl http://localhost:8001/health
@@ -121,7 +169,7 @@ curl http://localhost:8001/health
 ### 2 — API Gateway
 
 ```powershell
-cd Mobile\gateway
+cd services\gateway
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -135,10 +183,10 @@ curl http://localhost:8000/health
 ### 3 — Mobile App
 
 ```powershell
-cd Mobile\app
+cd apps\mobile
 npm install
 
-# Set EXPO_PUBLIC_API_URL in Mobile\app\.env to your PC's LAN IP
+# Set EXPO_PUBLIC_API_URL in apps\mobile\.env to your PC's LAN IP
 notepad .env
 
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = "<PC-LAN-IP>"
@@ -189,11 +237,11 @@ npx expo start --go --clear       # scan QR with Expo Go on your phone
 
 ```powershell
 # Gateway (pytest — spins up a throwaway PostgreSQL)
-cd Mobile\gateway
+cd services\gateway
 python -m pytest -v
 
 # Mobile app (Jest)
-cd Mobile\app
+cd apps\mobile
 npm test
 npm test -- --coverage
 npx tsc --noEmit
@@ -209,7 +257,7 @@ npx tsc --noEmit
 | Android emulator | `http://10.0.2.2:8000` |
 | iOS Simulator (macOS) | `http://localhost:8000` |
 
-After editing `Mobile/app/.env`, restart Metro: `npx expo start --clear`
+After editing `apps/mobile/.env`, restart Metro: `npx expo start --clear`
 
 ---
 
@@ -221,7 +269,7 @@ After editing `Mobile/app/.env`, restart Metro: `npx expo start --clear`
 | `No module named 'greenlet'` | Use `SQLAlchemy[asyncio]` in `requirements.txt` (already fixed) |
 | `Query encoding timeout` | Set `RAG_TIMEOUT=5.0` in `.env` |
 | Container still loading | Wait 40 s after `docker-compose up`; `docker logs eduarai_ai --tail 30` |
-| No documents returned from RAG | Run `python load_curriculum.py` |
+| No documents returned from RAG | Run `python scripts\load_curriculum.py` inside `services\ai\` |
 | QR code opens wrong IP | Set `REACT_NATIVE_PACKAGER_HOSTNAME=<PC-LAN-IP>` before `expo start` |
 | 401 errors from app | Check `EXPO_PUBLIC_API_URL` points to the gateway, not AI service |
 
@@ -229,6 +277,6 @@ After editing `Mobile/app/.env`, restart Metro: `npx expo start --clear`
 
 ## Detailed Docs
 
-- [AI Service →](AI/README.md)
-- [API Gateway →](Mobile/gateway/README.md)
-- [Mobile App →](Mobile/app/README.md)
+- [AI Service →](services/ai/README.md)
+- [API Gateway →](services/gateway/README.md)
+- [Mobile App →](apps/mobile/README.md)

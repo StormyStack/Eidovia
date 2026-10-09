@@ -53,4 +53,4 @@ HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
 # Run the exact same command used locally
-CMD ["python", "-m", "uvicorn", "main_service:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

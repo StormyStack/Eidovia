@@ -6,7 +6,11 @@
 
 # ─── Secrets & environment ─────────────────────────────────────
 .env
-.env*.local
+.env.local
+.env.*.local
+# Keep templates — they contain no real values
+!.env.example
+!**/.env.example
 
 # ─── Python ────────────────────────────────────────────────────
 __pycache__/
@@ -14,6 +18,8 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+env/
+ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -21,6 +27,10 @@ venv/
 dist/
 build/
 *.so
+.coverage
+.coverage.*
+htmlcov/
+coverage/
 
 # ─── Node / JavaScript ─────────────────────────────────────────
 node_modules/
@@ -47,18 +57,10 @@ Mobile/app/android/
 *.mobileprovision
 *.pem
 *.orig.*
-
-# ─── Kotlin build ─────────────────────────────────────────────
 .kotlin/
 
 # ─── Local dev database (scripts/dev_db.py) ───────────────────
 .devdb/
-
-# ─── Test coverage ────────────────────────────────────────────
-coverage/
-htmlcov/
-.coverage
-.coverage.*
 
 # ─── OS / Editor ───────────────────────────────────────────────
 .DS_Store
@@ -68,3 +70,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
+
+# ─── Logs ──────────────────────────────────────────────────────
+*.log

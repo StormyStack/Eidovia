@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sentence_transformers import SentenceTransformer
 
-import config_prod as config
-from cache_service import cache_service
+from app import config
+from app.cache import cache_service
 
 logger = logging.getLogger(__name__)
 

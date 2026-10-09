@@ -10,8 +10,8 @@ from typing import Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
-# Load the unified root .env  (Thesis/.env), two directories up from AI/config_prod.py
-_ROOT_ENV = Path(__file__).resolve().parent.parent / ".env"
+# Load the unified root .env (Thesis/.env) — 3 levels up from services/ai/app/config.py
+_ROOT_ENV = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=_ROOT_ENV, override=False)
 
 logger = logging.getLogger(__name__)

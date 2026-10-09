@@ -10,7 +10,7 @@ from typing import Optional, Any, Dict
 import redis.asyncio as redis
 from datetime import timedelta
 import hashlib
-import config_prod as config
+from app import config
 
 logger = logging.getLogger(__name__)
 

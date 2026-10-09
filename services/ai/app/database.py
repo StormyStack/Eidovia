@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy import event, text
 from typing import Optional, AsyncGenerator
 
-import config_prod as config
+from app import config
 
 logger = logging.getLogger(__name__)
 

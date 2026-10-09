@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 
-import config_prod as config
+from app import config
 
 logger = logging.getLogger(__name__)
 

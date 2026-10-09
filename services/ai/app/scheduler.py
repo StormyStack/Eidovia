@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import redis.asyncio as aioredis
 from typing import Optional
 
-import config_prod as config
+from app import config
 
 logger = logging.getLogger(__name__)
 

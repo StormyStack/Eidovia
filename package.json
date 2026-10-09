@@ -1,0 +1,15 @@
+{
+  "name": "eduar-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EduAR-AI monorepo root — scripts proxy into each app/service",
+  "scripts": {
+    "mobile":           "npm --prefix apps/mobile start",
+    "mobile:go":        "npm --prefix apps/mobile run go",
+    "mobile:android":   "npm --prefix apps/mobile run android",
+    "mobile:ios":       "npm --prefix apps/mobile run ios",
+    "mobile:test":      "npm --prefix apps/mobile test",
+    "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
+    "test":             "npm --prefix apps/mobile test"
+  }
+}

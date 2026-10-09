@@ -23,13 +23,13 @@ from pydantic import BaseModel
 import uvicorn
 import time
 
-import config_prod as config
-from database_service import db
-from rag_service import rag_service
-from bandit_service import bandit
-from scheduler_service import scheduler
-from cache_service import cache_service
-from event_service import event_service, EventRequest
+from app import config
+from app.database import db
+from app.rag import rag_service
+from app.bandit import bandit
+from app.scheduler import scheduler
+from app.cache import cache_service
+from app.events import event_service, EventRequest
 
 logger = logging.getLogger(__name__)
 
