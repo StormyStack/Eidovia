@@ -1,0 +1,10 @@
+# Local settings and secrets (copy .env.example -> .env)
+.env
+
+# Local dev database created by scripts/dev_db.py
+.devdb/
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
