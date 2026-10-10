@@ -5,12 +5,13 @@ Handles environment variables, connection strings, and global constants.
 
 import os
 import logging
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 
-# Load the unified root .env (Thesis/.env) — 3 levels up from services/ai/app/config.py
+# Load the unified root .env (Thesis/.env) — 4 levels up from services/ai/app/config.py
 _ROOT_ENV = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=_ROOT_ENV, override=False)
 
@@ -48,8 +49,6 @@ DATABASE_USER = get_env("POSTGRES_USER", "appuser")
 DATABASE_PASSWORD = get_env("DB_PASSWORD", required=True)
 DATABASE_NAME = get_env("POSTGRES_DB", "eidovia")
 
-import urllib.parse
-
 _db_password_quoted = urllib.parse.quote_plus(DATABASE_PASSWORD)
 DATABASE_URL = f"postgresql+asyncpg://{DATABASE_USER}:{_db_password_quoted}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
 
@@ -86,19 +85,20 @@ EMBEDDING_DIMENSION = 384
 RAG_THRESHOLD = float(get_env("RAG_THRESHOLD", "0.40"))
 RAG_TOP_K = int(get_env("RAG_TOP_K", "3"))
 RAG_TIMEOUT = float(get_env("RAG_TIMEOUT", "5.0"))
+
 # ============================================================
 # BANDIT CONFIGURATION
 # ============================================================
 
 BANDIT_ACTIONS = [
     "increase_difficulty",
-    "decrease_difficulty", 
+    "decrease_difficulty",
     "maintain_difficulty",
     "show_hint",
     "hide_hint",
     "suggest_quiz",
     "suggest_ar_activity",
-    "switch_scene"
+    "switch_scene",
 ]
 BANDIT_NUM_ACTIONS = len(BANDIT_ACTIONS)
 BANDIT_EPSILON = float(get_env("BANDIT_EPSILON", "0.15"))
@@ -122,6 +122,14 @@ API_PORT = int(get_env("API_PORT", "8001"))
 WS_TIMEOUT = float(get_env("WS_TIMEOUT", "10.0"))
 WS_MAX_FRAME_SIZE = int(get_env("WS_MAX_FRAME_SIZE", "1000000"))
 REQUEST_TIMEOUT = float(get_env("REQUEST_TIMEOUT", "5.0"))
+
+# ============================================================
+# LOCAL LLM CONFIGURATION (Phi-4 mini via Ollama)
+# ============================================================
+
+LLM_BASE_URL = get_env("LLM_BASE_URL", "http://host.docker.internal:11434")
+LLM_MODEL = get_env("LLM_MODEL", "phi4-mini")
+LLM_TIMEOUT = float(get_env("LLM_TIMEOUT", "120.0"))
 
 # ============================================================
 # FEATURE FLAGS
