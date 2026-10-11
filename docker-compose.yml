@@ -17,6 +17,9 @@ services:
       - ./services/ai/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./services/ai/migrations/002_events.sql:/docker-entrypoint-initdb.d/002_events.sql:ro
       - ./services/ai/migrations/003_hoe_levels.sql:/docker-entrypoint-initdb.d/003_hoe_levels.sql:ro
+      - ./services/ai/migrations/004_audit_logs.sql:/docker-entrypoint-initdb.d/004_audit_logs.sql:ro
+      - ./services/ai/migrations/005_admin_user.sql:/docker-entrypoint-initdb.d/005_admin_user.sql:ro
+      - ./services/ai/migrations/006_admin_support_maintenance.sql:/docker-entrypoint-initdb.d/006_admin_support_maintenance.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eidovia}"]
       interval: 5s
@@ -86,6 +89,59 @@ services:
     volumes:
       - ./services/gateway/app:/app/app
       - ./services/gateway/scripts:/app/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eidovia_network
+
+  admin:
+    build:
+      context: ./apps/admin
+      dockerfile: Dockerfile
+    image: thesis-admin:latest
+    container_name: eidovia_admin
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_PORT:-8090}:8090"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - ./apps/admin:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eidovia_network
+
+  logger:
+    build:
+      context: ./services/logger
+      dockerfile: Dockerfile
+    image: thesis-logger:latest
+    container_name: eidovia_logger
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ./services/logger:/app
     depends_on:
       postgres:
         condition: service_healthy

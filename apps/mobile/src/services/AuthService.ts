@@ -171,8 +171,13 @@ export const AuthService = {
     return { token, userId, profile };
   },
 
-  /** Purge every stored credential (token, user_id, cached profile). */
+  /** Purge every stored credential (token, user_id, cached profile) and notify the server. */
   async logout(): Promise<void> {
+    try {
+      await ApiClient.post('/api/auth/logout', {});
+    } catch (e) {
+      // Ignore network errors; always clear the local session so the user isn't trapped
+    }
     await clearStoredSession();
   },
 };

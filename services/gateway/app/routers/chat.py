@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.deps import CurrentUser, get_current_user
 from app.cache import redis_cache
+from app.logger_client import push_log_event
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,13 @@ async def chat(
     hot = await redis_cache.get_hot_message(body.question)
     if hot:
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        await push_log_event(
+            "message_sent",
+            current_user.user_id,
+            current_user.username,
+            current_user.is_admin,
+            {"question": body.question, "latency_ms": latency_ms, "cached": True},
+        )
         return ChatResponse(
             answer=hot["answer"],
             is_on_topic=hot.get("is_on_topic", True),
@@ -124,6 +132,14 @@ async def chat(
                 # Save as Hot Message in Redis
                 await redis_cache.set_hot_message(body.question, {"answer": answer, "is_on_topic": is_on_topic})
 
+                await push_log_event(
+                    "message_sent",
+                    current_user.user_id,
+                    current_user.username,
+                    current_user.is_admin,
+                    {"question": body.question, "latency_ms": latency_ms, "cached": False},
+                )
+
                 return ChatResponse(
                     answer=answer,
                     is_on_topic=is_on_topic,
@@ -148,12 +164,27 @@ async def chat(
                 },
             )
             if resp.status_code == 200:
-                return ChatResponse(**resp.json())
+                resp_data = resp.json()
+                await push_log_event(
+                    "message_sent",
+                    current_user.user_id,
+                    current_user.username,
+                    current_user.is_admin,
+                    {"question": body.question, "latency_ms": resp_data.get("latency_ms")},
+                )
+                return ChatResponse(**resp_data)
     except Exception:
         pass
 
     # 3. Graceful fallback message if Ollama is still pulling or starting up
     latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    await push_log_event(
+        "message_sent",
+        current_user.user_id,
+        current_user.username,
+        current_user.is_admin,
+        {"question": body.question, "latency_ms": latency_ms, "fallback": True},
+    )
     return ChatResponse(
         answer=(
             "Hello! I am your Eidovia biology tutor. Port 11434 (Ollama) is being connected. "

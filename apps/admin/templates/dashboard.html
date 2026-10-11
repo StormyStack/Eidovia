@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eidovia Enterprise Admin Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #e0e7ff;
+            --bg: #f8fafc;
+            --sidebar-bg: #0f172a;
+            --sidebar-text: #94a3b8;
+            --sidebar-hover: #1e293b;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            min-height: 100vh;
+        }
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.15rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .sidebar-brand svg { color: #818cf8; }
+        .sidebar-menu {
+            list-style: none;
+            padding: 1rem 0.75rem;
+            flex: 1;
+        }
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            color: var(--sidebar-text);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            margin-bottom: 0.25rem;
+        }
+        .sidebar-item:hover { background-color: var(--sidebar-hover); color: #fff; }
+        .sidebar-item.active { background-color: var(--primary); color: #fff; }
+        .sidebar-footer {
+            padding: 1.25rem;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            font-size: 0.8rem;
+            color: var(--sidebar-text);
+        }
+
+        /* MAIN CONTENT AREA */
+        #main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        header {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 0.9rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .header-title { font-size: 1.1rem; font-weight: 700; }
+        .header-actions { display: flex; align-items: center; gap: 1rem; }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .status-badge.connected { background-color: #dcfce7; color: #166534; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: currentColor; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s ease-in-out;
+            text-decoration: none;
+            gap: 0.4rem;
+        }
+        .btn-primary { background-color: var(--primary); color: #fff; }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-danger { background-color: var(--danger); color: #fff; }
+        .btn-danger:hover { background-color: var(--danger-hover); }
+        .btn-success { background-color: var(--success); color: #fff; }
+        .btn-secondary { background-color: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); }
+        .btn-secondary:hover { background-color: #e2e8f0; }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+
+        .container { padding: 2rem; }
+
+        /* AUTH CARD */
+        #auth-panel {
+            max-width: 420px;
+            margin: 6rem auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 2.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
+        }
+        .form-group { margin-bottom: 1.25rem; }
+        .form-group label { display: block; margin-bottom: 0.35rem; font-size: 0.85rem; font-weight: 600; }
+        .form-control {
+            width: 100%;
+            padding: 0.6rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 0.375rem;
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+        .form-control:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+        /* KPI METRIC CARDS */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background: var(--card-bg);
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        .metric-card .title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem; }
+        .metric-card .value { font-size: 1.85rem; font-weight: 700; color: var(--text-main); }
+        .metric-card .subtitle { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+        /* TAB PANELS */
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* CARDS & TABLES */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .card-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-header h3 { font-size: 1.05rem; font-weight: 700; }
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th {
+            background-color: #f8fafc;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 0.85rem 1.25rem;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+        tr:hover td { background-color: #f8fafc; }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-admin { background-color: #e0e7ff; color: #4338ca; }
+        .badge-student { background-color: #f1f5f9; color: #475569; }
+        .badge-open { background-color: #fee2e2; color: #991b1b; }
+        .badge-in_progress { background-color: #fef3c7; color: #92400e; }
+        .badge-resolved { background-color: #dcfce7; color: #166534; }
+        .badge-high { background-color: #fee2e2; color: #b91c1c; }
+        .badge-medium { background-color: #ffedd5; color: #c2410c; }
+        .badge-low { background-color: #f1f5f9; color: #475569; }
+
+        /* MODAL */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.55);
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .modal {
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            padding: 1.75rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        .modal h3 { margin-bottom: 1rem; }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        .flash { animation: flashGreen 2s ease-out; }
+        @keyframes flashGreen {
+            0% { background-color: #bbf7d0; }
+            100% { background-color: transparent; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" style="display: none;">
+        <div class="sidebar-brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span>Eidovia Admin</span>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item active" onclick="navigate('tab-overview')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <span>Overview</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-users')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Users & Accounts</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-support')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                <span>User Support</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-system')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                <span>System Maintenance</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-logs')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <span>Live Audit Stream</span>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <div>Eidovia Core v0.1.0</div>
+            <div>Docker Microservices</div>
+        </div>
+    </aside>
+
+    <!-- MAIN BODY -->
+    <div id="main-content">
+        <!-- TOP HEADER -->
+        <header id="top-header" style="display: none;">
+            <div class="header-title" id="page-title">Admin Console Overview</div>
+            <div class="header-actions">
+                <span id="ws-badge" class="status-badge">
+                    <span class="status-dot"></span>
+                    <span id="ws-text">Connecting</span>
+                </span>
+                <span id="admin-user-display" style="font-size:0.85rem; font-weight:600;"></span>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">Sign Out</button>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- LOGIN PANEL -->
+            <div id="auth-panel">
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    <h2 style="margin-top:0.5rem;">Admin Sign In</h2>
+                    <p style="color:var(--text-muted); font-size:0.875rem;">Enterprise Administrative Management Portal</p>
+                </div>
+                <div class="form-group">
+                    <label>Admin Username</label>
+                    <input type="text" id="login-username" class="form-control" value="admin">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" class="form-control" value="secretpassword">
+                </div>
+                <button class="btn btn-primary" style="width:100%;" onclick="login()">Enter Admin Center</button>
+            </div>
+
+            <!-- DASHBOARD TABS -->
+            <div id="admin-workspace" style="display: none;">
+                
+                <!-- TAB 1: OVERVIEW -->
+                <div id="tab-overview" class="tab-panel active">
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="title">Total Learners</span>
+                            <span id="metric-total-users" class="value">0</span>
+                            <span class="subtitle">Platform registrations</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Active Students</span>
+                            <span id="metric-students" class="value">0</span>
+                            <span class="subtitle">Enrolled in DNA modules</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Administrators</span>
+                            <span id="metric-admins" class="value">0</span>
+                            <span class="subtitle">Staff accounts</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">AI Inquiries</span>
+                            <span id="metric-messages" class="value">0</span>
+                            <span class="subtitle">DNA tutoring questions</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Support Tickets</span>
+                            <span id="metric-tickets" class="value">0</span>
+                            <span class="subtitle">Pending assistance</span>
+                        </div>
+                    </div>
+
+                    <!-- SYSTEM DIAGNOSTICS CARD -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Microservices Health & Connectivity</h3>
+                            <button class="btn btn-secondary btn-sm" onclick="fetchHealth()">Check Now</button>
+                        </div>
+                        <div style="padding: 1.5rem; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                            <div style="border:1px solid var(--border); border-radius:0.5rem; padding:1rem;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                                    <strong>PostgreSQL (pgvector)</strong>
+                                    <span id="diag-db-status" class="badge badge-resolved">Checking</span>
+                                </div>
+                                <div id="diag-db-info" style="font-size:0.85rem; color:var(--text-muted);">Latency: -- ms</div>
+                            </div>
+                            <div style="border:1px solid var(--border); border-radius:0.5rem; padding:1rem;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                                    <strong>Redis (Cache & Stream)</strong>
+                                    <span id="diag-redis-status" class="badge badge-resolved">Checking</span>
+                                </div>
+                                <div id="diag-redis-info" style="font-size:0.85rem; color:var(--text-muted);">Latency: -- ms</div>
+                            </div>
+                            <div style="border:1px solid var(--border); border-radius:0.5rem; padding:1rem;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
+                                    <strong>Ollama LLM (Phi-4 Mini)</strong>
+                                    <span id="diag-ai-status" class="badge badge-resolved">Checking</span>
+                                </div>
+                                <div id="diag-ai-info" style="font-size:0.85rem; color:var(--text-muted);">Port 11434</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: USERS -->
+                <div id="tab-users" class="tab-panel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Learners & Administrator Accounts</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="user-search" class="form-control" style="width: 250px;" placeholder="Search user or email..." oninput="debounceUserSearch()">
+                                <button class="btn btn-primary" onclick="openCreateUserModal()">+ Provision User</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Detail Level</th>
+                                        <th>Language</th>
+                                        <th>Registered</th>
+                                        <th style="text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: USER SUPPORT -->
+                <div id="tab-support" class="tab-panel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Learner Support Inquiries & Assistance</h3>
+                            <button class="btn btn-primary btn-sm" onclick="openCreateTicketModal()">+ Open Support Ticket</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Requester</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Admin Notes</th>
+                                        <th style="text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tickets-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: SYSTEM MAINTENANCE -->
+                <div id="tab-system" class="tab-panel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Platform Cache & Maintenance Operations</h3>
+                        </div>
+                        <div style="padding: 1.5rem; display:flex; flex-direction:column; gap:1.5rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:1rem;">
+                                <div>
+                                    <div style="font-weight:600;">Redis AI Hot Message Cache</div>
+                                    <div style="font-size:0.85rem; color:var(--text-muted);">Flushes pre-computed instant biology responses from Redis memory.</div>
+                                </div>
+                                <button class="btn btn-danger btn-sm" onclick="flushSystemCache()">Flush AI Cache</button>
+                            </div>
+
+                            <div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                                    <div>
+                                        <div style="font-weight:600;">System Announcements & Maintenance Advisories</div>
+                                        <div style="font-size:0.85rem; color:var(--text-muted);">Broadcast notifications across the mobile and web application.</div>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="openAnnouncementModal()">+ Create Announcement</button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Title</th>
+                                                <th>Message</th>
+                                                <th>Level</th>
+                                                <th>Status</th>
+                                                <th>Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="announcements-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: AUDIT LOGS -->
+                <div id="tab-logs" class="tab-panel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Real-time System Audit Stream</h3>
+                            <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">Refresh</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>User</th>
+                                        <th>Action</th>
+                                        <th>Event Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logs-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREATE USER -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal">
+            <h3>Provision Account</h3>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="new-username" class="form-control" placeholder="e.g. biology_student">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="new-email" class="form-control" placeholder="user@eidovia.com">
+            </div>
+            <div class="form-group">
+                <label>Password (min 8 chars)</label>
+                <input type="password" id="new-password" class="form-control" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+                <label>Detail Level (1-3)</label>
+                <select id="new-detail" class="form-control">
+                    <option value="1">Level 1 (Introductory)</option>
+                    <option value="2">Level 2 (Intermediate)</option>
+                    <option value="3">Level 3 (Advanced)</option>
+                </select>
+            </div>
+            <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                <input type="checkbox" id="new-is-admin">
+                <label for="new-is-admin" style="margin:0;">Grant Administrator Privileges</label>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('create-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitCreateUser()">Create Account</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT USER -->
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal">
+            <h3>Update User Profile</h3>
+            <input type="hidden" id="edit-user-id">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="edit-username" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="edit-email" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Language</label>
+                <input type="text" id="edit-language" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Detail Level (1-3)</label>
+                <select id="edit-detail" class="form-control">
+                    <option value="1">Level 1</option>
+                    <option value="2">Level 2</option>
+                    <option value="3">Level 3</option>
+                </select>
+            </div>
+            <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                <input type="checkbox" id="edit-is-admin">
+                <label for="edit-is-admin" style="margin:0;">Administrator Privileges</label>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitEditUser()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: RESET PASSWORD -->
+    <div id="reset-pwd-modal" class="modal-overlay">
+        <div class="modal">
+            <h3>Reset User Password</h3>
+            <p id="reset-pwd-subtitle" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;"></p>
+            <input type="hidden" id="reset-pwd-user-id">
+            <div class="form-group">
+                <label>New Password (min 8 characters)</label>
+                <input type="password" id="reset-pwd-val" class="form-control" placeholder="••••••••">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('reset-pwd-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitResetPassword()">Apply Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SUPPORT TICKET ASSIST -->
+    <div id="ticket-modal" class="modal-overlay">
+        <div class="modal">
+            <h3 id="ticket-modal-title">Support Ticket Assistance</h3>
+            <input type="hidden" id="ticket-id-val">
+            <div class="form-group">
+                <label>Status</label>
+                <select id="ticket-status-val" class="form-control">
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Priority</label>
+                <select id="ticket-priority-val" class="form-control">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Admin Resolution Notes / Reply</label>
+                <textarea id="ticket-notes-val" class="form-control" rows="4" placeholder="Enter support notes or action taken..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('ticket-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitTicketUpdate()">Save Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CREATE TICKET -->
+    <div id="new-ticket-modal" class="modal-overlay">
+        <div class="modal">
+            <h3>Open Support Ticket</h3>
+            <div class="form-group">
+                <label>Subject</label>
+                <input type="text" id="new-ticket-subject" class="form-control" placeholder="e.g. Cannot complete quiz module 2">
+            </div>
+            <div class="form-group">
+                <label>Priority</label>
+                <select id="new-ticket-priority" class="form-control">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description of Issue</label>
+                <textarea id="new-ticket-message" class="form-control" rows="4" placeholder="Describe the problem..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('new-ticket-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitCreateTicket()">Submit Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ANNOUNCEMENT -->
+    <div id="announcement-modal" class="modal-overlay">
+        <div class="modal">
+            <h3>Broadcast Platform Announcement</h3>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="ann-title" class="form-control" placeholder="e.g. Scheduled Maintenance">
+            </div>
+            <div class="form-group">
+                <label>Level</label>
+                <select id="ann-level" class="form-control">
+                    <option value="info">Information</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Announcement Body</label>
+                <textarea id="ann-message" class="form-control" rows="4" placeholder="Message to display to students..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('announcement-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAnnouncement()">Broadcast</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let jwtToken = '';
+        let ws;
+        let searchTimeout = null;
+
+        async function login() {
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value;
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p})
+                });
+                if (!res.ok) {
+                    alert("Invalid administrative credentials.");
+                    return;
+                }
+                const data = await res.json();
+                jwtToken = data.token;
+
+                document.getElementById('auth-panel').style.display = 'none';
+                document.getElementById('sidebar').style.display = 'flex';
+                document.getElementById('top-header').style.display = 'flex';
+                document.getElementById('admin-workspace').style.display = 'block';
+                document.getElementById('admin-user-display').textContent = 'Admin: ' + u;
+
+                await loadDashboard();
+                connectWebSocket();
+            } catch(e) { alert("Login Error: " + e.message); }
+        }
+
+        function logout() {
+            if (ws) ws.close();
+            jwtToken = '';
+            document.getElementById('sidebar').style.display = 'none';
+            document.getElementById('top-header').style.display = 'none';
+            document.getElementById('admin-workspace').style.display = 'none';
+            document.getElementById('auth-panel').style.display = 'block';
+        }
+
+        function navigate(tabId) {
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            const titles = {
+                'tab-overview': 'Admin Console Overview',
+                'tab-users': 'User Account & Profile Management',
+                'tab-support': 'Learner Support & Assistance',
+                'tab-system': 'System Health & Maintenance',
+                'tab-logs': 'Live Audit Stream'
+            };
+            document.getElementById('page-title').textContent = titles[tabId] || 'Admin Center';
+        }
+
+        async function loadDashboard() {
+            await Promise.all([fetchStats(), fetchHealth(), fetchUsers(), fetchTickets(), fetchAnnouncements(), fetchLogs()]);
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/admin/stats', { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (res.ok) {
+                    const stats = await res.json();
+                    document.getElementById('metric-total-users').textContent = stats.total_users;
+                    document.getElementById('metric-students').textContent = stats.student_users;
+                    document.getElementById('metric-admins').textContent = stats.admin_users;
+                    document.getElementById('metric-messages').textContent = stats.chat_messages;
+                    document.getElementById('metric-tickets').textContent = stats.open_tickets || 0;
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function fetchHealth() {
+            try {
+                const res = await fetch('/admin/system/health', { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (res.ok) {
+                    const h = await res.json();
+                    // Database
+                    document.getElementById('diag-db-status').textContent = h.database.connected ? 'Operational' : 'Down';
+                    document.getElementById('diag-db-status').className = 'badge ' + (h.database.connected ? 'badge-resolved' : 'badge-open');
+                    document.getElementById('diag-db-info').textContent = `Latency: ${h.database.latency_ms || '--'} ms | Size: ${h.database.db_size_bytes ? (h.database.db_size_bytes/1024/1024).toFixed(1) + 'MB' : 'N/A'}`;
+
+                    // Redis
+                    document.getElementById('diag-redis-status').textContent = h.redis.connected ? 'Operational' : 'Down';
+                    document.getElementById('diag-redis-status').className = 'badge ' + (h.redis.connected ? 'badge-resolved' : 'badge-open');
+                    document.getElementById('diag-redis-info').textContent = `Latency: ${h.redis.latency_ms || '--'} ms | Keys: ${h.redis.total_keys || 0} | Memory: ${h.redis.used_memory_human || 'N/A'}`;
+
+                    // AI
+                    document.getElementById('diag-ai-status').textContent = h.ai_service.connected ? 'Active' : 'Unreachable';
+                    document.getElementById('diag-ai-status').className = 'badge ' + (h.ai_service.connected ? 'badge-resolved' : 'badge-open');
+                    document.getElementById('diag-ai-info').textContent = `Model: ${h.ai_service.active_model || 'phi4-mini'} | Latency: ${h.ai_service.latency_ms || '--'} ms`;
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function fetchUsers(search = '') {
+            try {
+                const url = search ? `/admin/users?q=${encodeURIComponent(search)}` : '/admin/users';
+                const res = await fetch(url, { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (!res.ok) return;
+                const users = await res.json();
+                const tbody = document.getElementById('users-table-body');
+                tbody.innerHTML = '';
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b;">No users registered yet.</td></tr>';
+                    return;
+                }
+                users.forEach(u => {
+                    const tr = document.createElement('tr');
+                    const roleBadge = u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-student">Student</span>';
+                    const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString() : '-';
+                    tr.innerHTML = `
+                        <td style="font-weight:600;">${u.username}</td>
+                        <td>${u.email}</td>
+                        <td>${roleBadge}</td>
+                        <td>Level ${u.detail_level}</td>
+                        <td>${u.language.toUpperCase()}</td>
+                        <td>${dateStr}</td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            <button class="btn btn-secondary btn-sm" onclick='openEditUserModal(${JSON.stringify(u)})'>Edit</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal('${u.user_id}', '${u.username}')">Reset Key</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.user_id}', '${u.username}')">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch(e) { console.error(e); }
+        }
+
+        function debounceUserSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const q = document.getElementById('user-search').value.trim();
+                fetchUsers(q);
+            }, 300);
+        }
+
+        /* SUPPORT TICKETS */
+        async function fetchTickets() {
+            try {
+                const res = await fetch('/admin/support/tickets', { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (!res.ok) return;
+                const tickets = await res.json();
+                const tbody = document.getElementById('tickets-table-body');
+                tbody.innerHTML = '';
+                if (tickets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b;">No support tickets open.</td></tr>';
+                    return;
+                }
+                tickets.forEach(t => {
+                    const tr = document.createElement('tr');
+                    const dateStr = t.created_at ? new Date(t.created_at).toLocaleString() : '-';
+                    tr.innerHTML = `
+                        <td style="font-weight:600;">${t.subject}</td>
+                        <td>${t.username}</td>
+                        <td><span class="badge badge-${t.priority}">${t.priority.toUpperCase()}</span></td>
+                        <td><span class="badge badge-${t.status}">${t.status.replace('_', ' ').toUpperCase()}</span></td>
+                        <td>${dateStr}</td>
+                        <td style="font-size:0.8rem; color:#64748b; max-width:200px;">${t.admin_notes || 'None'}</td>
+                        <td style="text-align: right;">
+                            <button class="btn btn-secondary btn-sm" onclick='openAssistTicketModal(${JSON.stringify(t)})'>Manage</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch(e) { console.error(e); }
+        }
+
+        /* ANNOUNCEMENTS */
+        async function fetchAnnouncements() {
+            try {
+                const res = await fetch('/admin/system/announcements', { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (!res.ok) return;
+                const list = await res.json();
+                const tbody = document.getElementById('announcements-table-body');
+                tbody.innerHTML = '';
+                list.forEach(a => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight:600;">${a.title}</td>
+                        <td>${a.message}</td>
+                        <td><span class="badge badge-${a.level === 'critical' ? 'high' : 'medium'}">${a.level.toUpperCase()}</span></td>
+                        <td><span class="badge badge-resolved">Active</span></td>
+                        <td>${a.created_at ? new Date(a.created_at).toLocaleDateString() : '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch(e) { console.error(e); }
+        }
+
+        async function flushSystemCache() {
+            if (!confirm("Are you sure you want to flush all Redis hot biology cache keys?")) return;
+            try {
+                const res = await fetch('/admin/system/cache/flush', {
+                    method: 'POST',
+                    headers: {'Authorization': 'Bearer ' + jwtToken}
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`Cache purged successfully! Cleared ${data.deleted_keys} keys.`);
+                    fetchHealth();
+                }
+            } catch(e) { alert(e.message); }
+        }
+
+        /* AUDIT LOGS */
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/admin/logs', { headers: {'Authorization': 'Bearer ' + jwtToken} });
+                if (!res.ok) return;
+                const logs = await res.json();
+                const tbody = document.getElementById('logs-table-body');
+                tbody.innerHTML = '';
+                logs.forEach(log => appendLogRow(log, false));
+            } catch(e) { console.error(e); }
+        }
+
+        function appendLogRow(log, prepend = true) {
+            const tbody = document.getElementById('logs-table-body');
+            const tr = document.createElement('tr');
+            if (prepend) tr.classList.add('flash');
+            const timeStr = log.created_at ? new Date(log.created_at).toLocaleTimeString() : '';
+            tr.innerHTML = `
+                <td style="white-space:nowrap; color:#64748b; font-size:0.8rem;">${timeStr}</td>
+                <td style="font-weight:600;">${log.username}</td>
+                <td><span class="badge badge-student">${log.action}</span></td>
+                <td><pre style="font-size:0.75rem; max-width:500px; overflow-x:auto;">${JSON.stringify(log.details)}</pre></td>
+            `;
+            if (prepend) tbody.insertBefore(tr, tbody.firstChild);
+            else tbody.appendChild(tr);
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/admin/ws?token=${jwtToken}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                const badge = document.getElementById('ws-badge');
+                badge.classList.add('connected');
+                document.getElementById('ws-text').textContent = 'Live Streaming';
+            };
+
+            ws.onmessage = (event) => {
+                const log = JSON.parse(event.data);
+                appendLogRow(log, true);
+                fetchStats();
+            };
+
+            ws.onclose = () => {
+                const badge = document.getElementById('ws-badge');
+                badge.classList.remove('connected');
+                document.getElementById('ws-text').textContent = 'Disconnected';
+                setTimeout(connectWebSocket, 5000);
+            };
+        }
+
+        /* MODALS */
+        function openCreateUserModal() { document.getElementById('create-modal').style.display = 'flex'; }
+        function openEditUserModal(user) {
+            document.getElementById('edit-user-id').value = user.user_id;
+            document.getElementById('edit-username').value = user.username;
+            document.getElementById('edit-email').value = user.email;
+            document.getElementById('edit-language').value = user.language;
+            document.getElementById('edit-detail').value = user.detail_level;
+            document.getElementById('edit-is-admin').checked = user.is_admin;
+            document.getElementById('edit-modal').style.display = 'flex';
+        }
+        function openResetPasswordModal(userId, username) {
+            document.getElementById('reset-pwd-user-id').value = userId;
+            document.getElementById('reset-pwd-subtitle').textContent = `Setting new credentials for: ${username}`;
+            document.getElementById('reset-pwd-val').value = '';
+            document.getElementById('reset-pwd-modal').style.display = 'flex';
+        }
+        function openAssistTicketModal(ticket) {
+            document.getElementById('ticket-id-val').value = ticket.ticket_id;
+            document.getElementById('ticket-modal-title').textContent = `Assist Ticket: ${ticket.subject}`;
+            document.getElementById('ticket-status-val').value = ticket.status;
+            document.getElementById('ticket-priority-val').value = ticket.priority;
+            document.getElementById('ticket-notes-val').value = ticket.admin_notes || '';
+            document.getElementById('ticket-modal').style.display = 'flex';
+        }
+        function openCreateTicketModal() { document.getElementById('new-ticket-modal').style.display = 'flex'; }
+        function openAnnouncementModal() { document.getElementById('announcement-modal').style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        async function submitCreateUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const email = document.getElementById('new-email').value.trim();
+            const password = document.getElementById('new-password').value;
+            const detail_level = parseInt(document.getElementById('new-detail').value);
+            const is_admin = document.getElementById('new-is-admin').checked;
+
+            try {
+                const res = await fetch('/admin/users', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ username, email, password, detail_level, is_admin })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Error: " + (err.detail || 'Failed to create user'));
+                    return;
+                }
+                closeModal('create-modal');
+                fetchUsers();
+                fetchStats();
+            } catch(e) { alert(e.message); }
+        }
+
+        async function submitEditUser() {
+            const userId = document.getElementById('edit-user-id').value;
+            const username = document.getElementById('edit-username').value.trim();
+            const email = document.getElementById('edit-email').value.trim();
+            const language = document.getElementById('edit-language').value.trim();
+            const detail_level = parseInt(document.getElementById('edit-detail').value);
+            const is_admin = document.getElementById('edit-is-admin').checked;
+
+            try {
+                const res = await fetch(`/admin/users/${userId}`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ username, email, language, detail_level, is_admin })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Error: " + (err.detail || 'Failed to update user'));
+                    return;
+                }
+                closeModal('edit-modal');
+                fetchUsers();
+                fetchStats();
+            } catch(e) { alert(e.message); }
+        }
+
+        async function submitResetPassword() {
+            const userId = document.getElementById('reset-pwd-user-id').value;
+            const new_password = document.getElementById('reset-pwd-val').value;
+            try {
+                const res = await fetch(`/admin/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ new_password })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Error: " + (err.detail || 'Password reset failed'));
+                    return;
+                }
+                alert("Password successfully reset!");
+                closeModal('reset-pwd-modal');
+            } catch(e) { alert(e.message); }
+        }
+
+        async function deleteUser(userId, username) {
+            if (!confirm(`Are you sure you want to delete "${username}"?`)) return;
+            try {
+                const res = await fetch(`/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {'Authorization': 'Bearer ' + jwtToken}
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Error: " + (err.detail || 'Failed to delete user'));
+                    return;
+                }
+                fetchUsers();
+                fetchStats();
+            } catch(e) { alert(e.message); }
+        }
+
+        async function submitTicketUpdate() {
+            const ticketId = document.getElementById('ticket-id-val').value;
+            const status = document.getElementById('ticket-status-val').value;
+            const priority = document.getElementById('ticket-priority-val').value;
+            const admin_notes = document.getElementById('ticket-notes-val').value;
+            try {
+                const res = await fetch(`/admin/support/tickets/${ticketId}`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ status, priority, admin_notes })
+                });
+                if (res.ok) {
+                    closeModal('ticket-modal');
+                    fetchTickets();
+                    fetchStats();
+                }
+            } catch(e) { alert(e.message); }
+        }
+
+        async function submitCreateTicket() {
+            const subject = document.getElementById('new-ticket-subject').value.trim();
+            const priority = document.getElementById('new-ticket-priority').value;
+            const message = document.getElementById('new-ticket-message').value.trim();
+            try {
+                const res = await fetch('/admin/support/tickets', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ subject, priority, message })
+                });
+                if (res.ok) {
+                    closeModal('new-ticket-modal');
+                    fetchTickets();
+                    fetchStats();
+                }
+            } catch(e) { alert(e.message); }
+        }
+
+        async function submitAnnouncement() {
+            const title = document.getElementById('ann-title').value.trim();
+            const level = document.getElementById('ann-level').value;
+            const message = document.getElementById('ann-message').value.trim();
+            try {
+                const res = await fetch('/admin/system/announcements', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ title, level, message })
+                });
+                if (res.ok) {
+                    closeModal('announcement-modal');
+                    fetchAnnouncements();
+                }
+            } catch(e) { alert(e.message); }
+        }
+    </script>
+</body>
+</html>
