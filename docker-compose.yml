@@ -1,5 +1,5 @@
 # docker-compose.yml, run from repo root (Thesis/)
-# Containers: PostgreSQL (pgvector), Redis, Ollama (Phi-4 mini + embeddings)
+# Containers: PostgreSQL (pgvector), Redis, Ollama (Phi-4 mini + all-minilm)
 # AI service and gateway run on the host with uvicorn (no Docker image needed)
 
 
@@ -55,8 +55,18 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      # Reuses the models already on this PC (phi4-mini), so nothing downloads twice
-      - C:/Users/Dell/.ollama:/root/.ollama
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=30m
+    # GPU access (needs NVIDIA drivers + Docker GPU support on the host).
+    # Remove this block on a machine without an NVIDIA GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - eidovia_network
 
@@ -64,6 +74,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  ollama_models:
 
 
 networks:
