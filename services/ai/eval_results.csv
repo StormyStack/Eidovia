@@ -1,0 +1,51 @@
+question,gold,target_level,cap,hit_at_3,returned,returned_levels,latency_ms,answer_chars
+What shape does DNA have?,The Double Helix Structure (NCBI),1,flat,True,Nucleotide Structure (OpenStax Biology) | The Double Helix Structure (NCBI) | Nitrogenous Bases (Khan Academy),"3,1,2",22290,604
+What shape does DNA have?,The Double Helix Structure (NCBI),1,1,True,The Double Helix Structure (NCBI),1,2244,77
+What shape does DNA have?,The Double Helix Structure (NCBI),1,2,True,The Double Helix Structure (NCBI) | Nitrogenous Bases (Khan Academy) | Base Pairing and Chargaff's Rules,"1,2,2",9696,473
+What shape does DNA have?,The Double Helix Structure (NCBI),1,3,True,Nucleotide Structure (OpenStax Biology) | The Double Helix Structure (NCBI) | Nitrogenous Bases (Khan Academy),"3,1,2",14958,589
+What shape does DNA have?,The Double Helix Structure (NCBI),1,4,True,Nucleotide Structure (OpenStax Biology) | The Double Helix Structure (NCBI) | Nitrogenous Bases (Khan Academy),"3,1,2",1626,147
+Which base pairs with adenine?,Base Pairing and Chargaff's Rules,2,flat,True,Nitrogenous Bases (Khan Academy) | Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI),"2,2,1",2025,147
+Which base pairs with adenine?,Base Pairing and Chargaff's Rules,2,1,False,The Double Helix Structure (NCBI),1,2619,105
+Which base pairs with adenine?,Base Pairing and Chargaff's Rules,2,2,True,Nitrogenous Bases (Khan Academy) | Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI),"2,2,1",4517,275
+Which base pairs with adenine?,Base Pairing and Chargaff's Rules,2,3,True,Nitrogenous Bases (Khan Academy) | Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI),"2,2,1",10406,140
+Which base pairs with adenine?,Base Pairing and Chargaff's Rules,2,4,True,Nitrogenous Bases (Khan Academy) | Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI),"2,2,1",9954,140
+What are the parts of a nucleotide?,Nucleotide Structure (OpenStax Biology),3,flat,True,Nucleotide Structure (OpenStax Biology) | Nitrogenous Bases (Khan Academy) | The Double Helix Structure (NCBI),"3,2,1",16968,448
+What are the parts of a nucleotide?,Nucleotide Structure (OpenStax Biology),3,1,False,The Double Helix Structure (NCBI),1,8738,305
+What are the parts of a nucleotide?,Nucleotide Structure (OpenStax Biology),3,2,False,Nitrogenous Bases (Khan Academy) | The Double Helix Structure (NCBI) | Base Pairing and Chargaff's Rules,"2,1,2",27251,675
+What are the parts of a nucleotide?,Nucleotide Structure (OpenStax Biology),3,3,True,Nucleotide Structure (OpenStax Biology) | Nitrogenous Bases (Khan Academy) | The Double Helix Structure (NCBI),"3,2,1",18700,523
+What are the parts of a nucleotide?,Nucleotide Structure (OpenStax Biology),3,4,True,Nucleotide Structure (OpenStax Biology) | Nitrogenous Bases (Khan Academy) | The Double Helix Structure (NCBI),"3,2,1",18577,523
+Why does DNA separate into two strands during replication?,Semi-Conservative Replication (OpenStax Biology),4,flat,True,Semi-Conservative Replication (OpenStax Biology) | Leading and Lagging Strands (Khan Academy) | DNA Replication Process Timeline,"4,4,4",19948,623
+Why does DNA separate into two strands during replication?,Semi-Conservative Replication (OpenStax Biology),4,1,False,The Double Helix Structure (NCBI),1,8189,401
+Why does DNA separate into two strands during replication?,Semi-Conservative Replication (OpenStax Biology),4,2,False,Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI),"2,1",18707,530
+Why does DNA separate into two strands during replication?,Semi-Conservative Replication (OpenStax Biology),4,3,False,Base Pairing and Chargaff's Rules | The Double Helix Structure (NCBI) | Nucleotide Structure (OpenStax Biology),"2,1,3",26966,528
+Why does DNA separate into two strands during replication?,Semi-Conservative Replication (OpenStax Biology),4,4,True,Semi-Conservative Replication (OpenStax Biology) | Leading and Lagging Strands (Khan Academy) | DNA Replication Process Timeline,"4,4,4",40071,861
+Which enzyme builds new DNA strands?,DNA Polymerase and Enzyme Catalysis (NCBI),4,flat,True,DNA Polymerase and Enzyme Catalysis (NCBI) | Leading and Lagging Strands (Khan Academy) | Semi-Conservative Replication (OpenStax Biology),"4,4,4",36918,354
+Which enzyme builds new DNA strands?,DNA Polymerase and Enzyme Catalysis (NCBI),4,1,False,The Double Helix Structure (NCBI),1,4191,147
+Which enzyme builds new DNA strands?,DNA Polymerase and Enzyme Catalysis (NCBI),4,2,False,The Double Helix Structure (NCBI) | Base Pairing and Chargaff's Rules | Nitrogenous Bases (Khan Academy),"1,2,2",10403,147
+Which enzyme builds new DNA strands?,DNA Polymerase and Enzyme Catalysis (NCBI),4,3,False,The Double Helix Structure (NCBI) | Nucleotide Structure (OpenStax Biology) | Base Pairing and Chargaff's Rules,"1,3,2",10725,147
+Which enzyme builds new DNA strands?,DNA Polymerase and Enzyme Catalysis (NCBI),4,4,True,DNA Polymerase and Enzyme Catalysis (NCBI) | Leading and Lagging Strands (Khan Academy) | Semi-Conservative Replication (OpenStax Biology),"4,4,4",24766,754
+Why is one DNA strand made in short pieces?,Leading and Lagging Strands (Khan Academy),4,flat,True,Leading and Lagging Strands (Khan Academy) | Semi-Conservative Replication (OpenStax Biology) | Nucleotide Structure (OpenStax Biology),"4,4,3",31474,714
+Why is one DNA strand made in short pieces?,Leading and Lagging Strands (Khan Academy),4,1,False,The Double Helix Structure (NCBI),1,11505,370
+Why is one DNA strand made in short pieces?,Leading and Lagging Strands (Khan Academy),4,2,False,The Double Helix Structure (NCBI) | Base Pairing and Chargaff's Rules | Nitrogenous Bases (Khan Academy),"1,2,2",2318,147
+Why is one DNA strand made in short pieces?,Leading and Lagging Strands (Khan Academy),4,3,False,Nucleotide Structure (OpenStax Biology) | The Double Helix Structure (NCBI) | Base Pairing and Chargaff's Rules,"3,1,2",7615,147
+Why is one DNA strand made in short pieces?,Leading and Lagging Strands (Khan Academy),4,4,True,Leading and Lagging Strands (Khan Academy) | Semi-Conservative Replication (OpenStax Biology) | Nucleotide Structure (OpenStax Biology),"4,4,3",23984,663
+What is the 5' cap on mRNA?,mRNA Processing in Eukaryotes (NCBI),4,flat,True,mRNA Processing in Eukaryotes (NCBI) | Translation Process (Khan Academy) | Transcription Overview (OpenStax Biology),"4,4,4",21536,392
+What is the 5' cap on mRNA?,mRNA Processing in Eukaryotes (NCBI),4,1,False,,,16,147
+What is the 5' cap on mRNA?,mRNA Processing in Eukaryotes (NCBI),4,2,False,,,11,147
+What is the 5' cap on mRNA?,mRNA Processing in Eukaryotes (NCBI),4,3,False,,,8,147
+What is the 5' cap on mRNA?,mRNA Processing in Eukaryotes (NCBI),4,4,True,mRNA Processing in Eukaryotes (NCBI) | Translation Process (Khan Academy) | Transcription Overview (OpenStax Biology),"4,4,4",33904,747
+How does the ribosome read mRNA?,Translation Process (Khan Academy),4,flat,True,Translation Process (Khan Academy) | mRNA Processing in Eukaryotes (NCBI) | Transcription Overview (OpenStax Biology),"4,4,4",30989,582
+How does the ribosome read mRNA?,Translation Process (Khan Academy),4,1,False,,,192,147
+How does the ribosome read mRNA?,Translation Process (Khan Academy),4,2,False,,,13,147
+How does the ribosome read mRNA?,Translation Process (Khan Academy),4,3,False,,,9,147
+How does the ribosome read mRNA?,Translation Process (Khan Academy),4,4,True,Translation Process (Khan Academy) | mRNA Processing in Eukaryotes (NCBI) | Transcription Overview (OpenStax Biology),"4,4,4",26790,649
+What is a frameshift mutation?,Types of Mutations (OpenStax Biology),3,flat,True,Types of Mutations (OpenStax Biology) | Mutation Causes and Prevention (NCBI) | Natural Selection and Evolution (Khan Academy),"3,4,1",22190,700
+What is a frameshift mutation?,Types of Mutations (OpenStax Biology),3,1,False,Natural Selection and Evolution (Khan Academy),1,9816,147
+What is a frameshift mutation?,Types of Mutations (OpenStax Biology),3,2,False,Natural Selection and Evolution (Khan Academy),1,3281,147
+What is a frameshift mutation?,Types of Mutations (OpenStax Biology),3,3,True,Types of Mutations (OpenStax Biology) | Natural Selection and Evolution (Khan Academy),"3,1",9263,317
+What is a frameshift mutation?,Types of Mutations (OpenStax Biology),3,4,True,Types of Mutations (OpenStax Biology) | Mutation Causes and Prevention (NCBI) | Natural Selection and Evolution (Khan Academy),"3,4,1",20522,764
+What does DNA methylation do?,DNA Methylation (NCBI),4,flat,True,DNA Methylation (NCBI) | Histone Modifications and Chromatin Remodeling (Khan Academy) | Nucleotide Structure (OpenStax Biology),"4,4,3",17477,550
+What does DNA methylation do?,DNA Methylation (NCBI),4,1,False,The Double Helix Structure (NCBI),1,4192,147
+What does DNA methylation do?,DNA Methylation (NCBI),4,2,False,The Double Helix Structure (NCBI),1,1522,147
+What does DNA methylation do?,DNA Methylation (NCBI),4,3,False,Nucleotide Structure (OpenStax Biology) | The Double Helix Structure (NCBI),"3,1",1835,147
+What does DNA methylation do?,DNA Methylation (NCBI),4,4,True,DNA Methylation (NCBI) | Histone Modifications and Chromatin Remodeling (Khan Academy) | Nucleotide Structure (OpenStax Biology),"4,4,3",20075,658

@@ -1,29 +1,29 @@
 """
-Eidovia Main Service (Cache-First Architecture)
-FastAPI microservice with RAG + Contextual Bandit + Redis Cache + local LLM (Phi-4 mini).
-Provides REST (/api/chat) and WebSocket (/ws/adapt/{session_id}) endpoints.
+Eidovia AI service: HOE depth-capped RAG with a local LLM (Phi-4 mini via Ollama).
+REST: /api/chat. WebSocket: /ws/adapt/{session_id}.
 """
 
-import logging
 import asyncio
-import numpy as np
-from typing import Optional
-from datetime import datetime
-from uuid import uuid4
-from fastapi import FastAPI, WebSocket, HTTPException, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
+import logging
 import time
+from datetime import datetime
+from typing import Optional
+from uuid import uuid4
+
+import numpy as np
+import uvicorn
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from app import config
-from app.database import db
-from app.rag import rag_service
 from app.bandit import bandit
-from app.scheduler import scheduler
 from app.cache import cache_service
-from app.events import event_service, EventRequest
+from app.database import db
+from app.events import EventRequest, event_service
 from app.llm import llm_client
+from app.rag import rag_service
+from app.scheduler import scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Eidovia Service",
-    description="Adaptive learning with RAG + Contextual Bandit + Redis Cache + LLM",
-    version="1.0.0"
+    description="Adaptive learning with HOE-capped RAG, local LLM, and Redis cache",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -62,10 +62,11 @@ GREETINGS = {
     "hi", "hello", "hey", "good morning", "good afternoon",
     "good evening", "thanks", "thank you",
 }
+VALID_LEVELS = {None, 1, 2, 3, 4}
 
 
-def _is_greeting(text: str) -> bool:
-    return text.strip().lower().rstrip("!.?") in GREETINGS
+def _is_greeting(text_in: str) -> bool:
+    return text_in.strip().lower().rstrip("!.?") in GREETINGS
 
 
 # ============================================================
@@ -73,15 +74,15 @@ def _is_greeting(text: str) -> bool:
 # ============================================================
 
 class ChatRequest(BaseModel):
-    """Chat endpoint request."""
+    """hoe_level caps retrieval depth (1 to 4). Omit it for no cap."""
     question: str
     user_id: Optional[str] = None
     session_id: Optional[str] = None
     module_id: Optional[str] = None
+    hoe_level: Optional[int] = Field(default=None, ge=1, le=4)
 
 
 class ChatResponse(BaseModel):
-    """Chat endpoint response."""
     answer: str
     is_on_topic: bool
     max_similarity: float
@@ -89,10 +90,14 @@ class ChatResponse(BaseModel):
     latency_ms: float
     decision_id: Optional[str] = None
     cached: bool = False
+    hoe_level: Optional[int] = None
+    # Chunks that were actually retrieved at this depth (for evaluation)
+    retrieved: list[dict] = []
+    # Chunks that were shown to the user as the basis of the answer
+    sources: list[dict] = []
 
 
 class CacheStatsResponse(BaseModel):
-    """Cache statistics response."""
     hits: int
     misses: int
     errors: int
@@ -102,283 +107,243 @@ class CacheStatsResponse(BaseModel):
 
 
 # ============================================================
-# LIFECYCLE EVENTS
+# LIFECYCLE
 # ============================================================
 
 @app.on_event("startup")
 async def startup():
-    """Initialize services on startup."""
     logger.info("=" * 70)
-    logger.info("🚀 Eidovia SERVICE STARTUP (Cache-First)")
+    logger.info("Eidovia SERVICE STARTUP")
     logger.info("=" * 70)
 
-    try:
-        await cache_service.connect()
-        logger.info("✅ Redis cache connected")
+    await cache_service.connect()
+    logger.info("Redis cache connected")
 
-        await db.connect()
-        logger.info("✅ Database connected")
+    await db.connect()
+    logger.info("Database connected")
 
-        await rag_service.initialize()
-        logger.info("✅ RAG service initialized")
+    await rag_service.initialize()
+    logger.info(f"RAG ready (embeddings: {rag_service.backend})")
 
-        # await scheduler.initialize()
-        logger.info("✅ Scheduler initialized")
-
-        # await scheduler.start()
-        logger.info("✅ Background scheduler started")
-
-        logger.info("=" * 70)
-        logger.info(f"API: http://{config.API_HOST}:{config.API_PORT}")
-        logger.info(f"LLM: {config.LLM_MODEL} at {config.LLM_BASE_URL} (mock={config.MOCK_LLM})")
-        logger.info("=" * 70)
-
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-        raise
+    # scheduler is intentionally not started yet (ETL job not implemented)
+    logger.info(f"LLM: {config.LLM_MODEL} at {config.LLM_BASE_URL} (mock={config.MOCK_LLM})")
+    logger.info("=" * 70)
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    """Cleanup on shutdown."""
     logger.info("Shutting down services...")
-
     try:
         await cache_service.close()
         await scheduler.stop()
         await llm_client.close()
+        await rag_service.close()
         await db.disconnect()
-        logger.info("✅ Cleanup complete")
+        logger.info("Cleanup complete")
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH AND CACHE
 # ============================================================
 
 @app.get("/health")
 async def health_check():
-    """System health check."""
     return {
         "status": "healthy",
         "service": "eidovia-ai",
         "version": "1.0.0",
         "database": "connected" if db.is_healthy else "disconnected",
         "cache": "connected" if cache_service.client else "disconnected",
-        "rag_ready": rag_service.model is not None,
+        "rag_ready": rag_service.ready,
+        "embed_backend": rag_service.backend,
         "scheduler_running": scheduler.running,
         "llm_model": config.LLM_MODEL,
         "mock_llm": config.MOCK_LLM,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
-# ============================================================
-# CACHE STATISTICS ENDPOINTS
-# ============================================================
-
 @app.get("/api/cache-stats", response_model=CacheStatsResponse)
 async def get_cache_stats():
-    """Get cache performance statistics."""
     stats = cache_service.get_stats()
-    redis_status = "connected" if cache_service.client else "disconnected"
-
     return CacheStatsResponse(
         hits=stats["hits"],
         misses=stats["misses"],
         errors=stats["errors"],
         total=stats["total"],
         hit_rate=stats["hit_rate"],
-        redis_status=redis_status
+        redis_status="connected" if cache_service.client else "disconnected",
     )
 
 
 @app.post("/api/cache-flush")
 async def flush_cache():
-    """Flush all cache (use with caution!)."""
     success = await cache_service.flush()
     return {
         "success": success,
-        "message": "Cache flushed" if success else "Failed to flush cache"
+        "message": "Cache flushed" if success else "Failed to flush cache",
     }
 
 
 # ============================================================
-# CHAT ENDPOINT (REST)
+# SHARED CHAT PIPELINE (used by REST and WebSocket)
+# ============================================================
+
+async def _run_chat(question: str, hoe_level: Optional[int]) -> dict:
+    start = time.time()
+
+    if hoe_level not in VALID_LEVELS:
+        raise ValueError("hoe_level must be 1 to 4, or omitted")
+
+    if _is_greeting(question):
+        return {
+            "answer": GREETING_MESSAGE,
+            "is_on_topic": False,
+            "max_similarity": 0.0,
+            "num_documents": 0,
+            "latency_ms": (time.time() - start) * 1000,
+            "decision_id": None,
+            "cached": False,
+            "hoe_level": hoe_level,
+            "retrieved": [],
+            "sources": [],
+        }
+
+    query_embedding = await rag_service.encode_query(question)
+
+    async with db.get_session() as session:
+        documents = await rag_service.retrieve_capped(
+            session, query_embedding, max_level=hoe_level
+        )
+
+    max_similarity = max((d["similarity"] for d in documents), default=0.0)
+    is_on_topic = bool(documents)
+    shown: list[dict] = []
+
+    if not documents:
+        answer = SCOPE_MESSAGE
+    elif config.MOCK_LLM:
+        answer = "Based on the curriculum:\n\n" + "\n\n".join(
+            f"[{d['title']}] {d['content']}" for d in documents
+        )
+        shown = documents
+    else:
+        try:
+            text_out = await llm_client.generate(question, documents, hoe_level)
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            text_out = None
+
+        if text_out is None:
+            answer = "The AI tutor is temporarily unavailable. Please try again shortly."
+        elif "NOT_IN_CURRICULUM" in text_out:
+            answer = SCOPE_MESSAGE
+        else:
+            # Sources come from the chunks actually sent, never from the model
+            titles = list(dict.fromkeys(d["title"] for d in documents))
+            answer = text_out + "\n\nSources: " + ", ".join(titles)
+            shown = documents
+
+    decision_id = None
+    try:
+        state_vector = np.array([
+            1.0 if is_on_topic else 0.0,
+            min(max_similarity, 1.0),
+            len(documents) / 10.0,
+            0.5, 0.5, 0.5, 0.5, 0.5,  # placeholders until real signals are wired
+        ])
+        bandit.select_action(state_vector)
+        decision_id = str(uuid4())
+    except Exception as e:
+        logger.warning(f"Bandit decision failed: {e}")
+
+    latency_ms = (time.time() - start) * 1000
+    logger.info(
+        f"Response (hoe_level={hoe_level}, docs={len(documents)}, "
+        f"latency={latency_ms:.0f}ms)"
+    )
+
+    def _summary(docs: list[dict]) -> list[dict]:
+        return [
+            {
+                "title": d["title"],
+                "hoe_level": d["hoe_level"],
+                "similarity": round(d["similarity"], 3),
+            }
+            for d in docs
+        ]
+
+    return {
+        "answer": answer,
+        "is_on_topic": is_on_topic,
+        "max_similarity": max_similarity,
+        "num_documents": len(documents),
+        "latency_ms": latency_ms,
+        "decision_id": decision_id,
+        "cached": False,
+        "hoe_level": hoe_level,
+        "retrieved": _summary(documents),
+        "sources": _summary(shown),
+    }
+
+
+VALID_LEVELS = {None, 1, 2, 3, 4}
+
+
+# ============================================================
+# CHAT (REST)
 # ============================================================
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Retrieve curriculum chunks, then generate an answer with the
-    local LLM (or return raw chunks when MOCK_LLM=True).
-    """
-    start_time = time.time()
-    session_id = request.session_id or str(uuid4())
-    user_id = request.user_id or "anonymous"
-
     try:
-        async with db.get_session() as session:
-
-            # ── STEP 1: Encode query ──────────────────────────────
-            logger.info(f"Processing query: {request.question[:50]}...")
-            query_embedding = await rag_service.encode_query(request.question)
-
-            # ── STEP 2: Build RAG context (cache-first) ───────────
-            rag_result = await rag_service.build_context(
-                session=session,
-                query=request.question,
-                query_embedding=query_embedding,
-                use_cache=True
-            )
-
-            is_on_topic = rag_result["is_on_topic"]
-            max_similarity = rag_result["max_similarity"]
-            num_documents = rag_result["num_documents"]
-            context = rag_result["context"]
-            documents = rag_result["documents"]
-
-            # ── STEP 3: Generate answer ───────────────────────────
-            if _is_greeting(request.question):
-                answer = GREETING_MESSAGE
-            elif is_on_topic and documents:
-                if config.MOCK_LLM:
-                    answer = "Based on the curriculum:\n\n" + context
-                else:
-                    try:
-                        answer = await llm_client.generate(request.question, documents)
-                    except Exception as e:
-                        logger.error(f"LLM call failed: {e}")
-                        answer = (
-                            "The AI tutor is temporarily unavailable. "
-                            "Please try again shortly."
-                        )
-                    else:
-                        if "NOT_IN_CURRICULUM" in answer:
-                            answer = SCOPE_MESSAGE
-            else:
-                answer = SCOPE_MESSAGE
-
-            # ── STEP 4: Bandit decision (adaptive action) ─────────
-            decision_id = None
-            try:
-                state_vector = np.array([
-                    1.0 if is_on_topic else 0.0,
-                    min(max_similarity, 1.0),
-                    num_documents / 10.0,
-                    0.5,  # placeholder: correct_answer_rate
-                    0.5,  # placeholder: hints_per_session
-                    0.5,  # placeholder: difficulty
-                    0.5,  # placeholder: engagement_rate
-                    0.5,  # placeholder: content_skip_rate
-                ])
-
-                action = bandit.select_action(state_vector)
-                decision_id = str(uuid4())
-
-                logger.info(f"Bandit action: {action} (decision_id: {decision_id})")
-            except Exception as e:
-                logger.warning(f"Bandit decision failed: {e}")
-
-            # ── STEP 5: Latency ───────────────────────────────────
-            latency_ms = (time.time() - start_time) * 1000
-            cached = rag_result.get("cached", False)
-
-            logger.info(
-                f"✅ Response complete "
-                f"(latency: {latency_ms:.1f}ms, cached: {cached})"
-            )
-
-            return ChatResponse(
-                answer=answer,
-                is_on_topic=is_on_topic,
-                max_similarity=max_similarity,
-                num_documents=num_documents,
-                latency_ms=latency_ms,
-                decision_id=decision_id,
-                cached=cached
-            )
-
+        result = await _run_chat(request.question, request.hoe_level)
     except Exception as e:
-        logger.error(f"❌ Chat request failed: {e}")
-        latency_ms = (time.time() - start_time) * 1000
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": str(e),
-                "latency_ms": latency_ms
-            }
-        )
+        logger.error(f"Chat request failed: {e}")
+        raise HTTPException(status_code=500, detail={"error": str(e)})
+    return ChatResponse(**result)
 
 
 # ============================================================
-# WEBSOCKET ENDPOINT (ADAPTIVE)
+# WEBSOCKET (ADAPTIVE)
 # ============================================================
 
 @app.websocket("/ws/adapt/{session_id}")
 async def websocket_adapt(websocket: WebSocket, session_id: str):
     """
-    WebSocket endpoint for real-time adaptive learning.
-    Client sends: {"question": "..."}
-    Server responds: {"answer": "...", "action": "...", ...}
+    Client sends: {"question": "...", "hoe_level": 1-4 (optional)}
+    Server replies with the same fields as /api/chat, plus session_id.
     """
     await websocket.accept()
     logger.info(f"WebSocket connected: {session_id}")
 
     try:
         while True:
-            data = await asyncio.wait_for(
-                websocket.receive_json(),
-                timeout=30.0
-            )
-
-            question = data.get("question", "")
+            data = await asyncio.wait_for(websocket.receive_json(), timeout=30.0)
+            question = (data.get("question") or "").strip()
+            hoe_level = data.get("hoe_level")
 
             if not question:
                 await websocket.send_json({
                     "error": "No question provided",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
                 })
                 continue
 
-            start_time = time.time()
-
             try:
-                async with db.get_session() as session:
-                    query_embedding = await rag_service.encode_query(question)
-                    rag_result = await rag_service.build_context(
-                        session=session,
-                        query=question,
-                        query_embedding=query_embedding,
-                        use_cache=True
-                    )
-
-                    state_vector = np.random.rand(8)
-                    action = bandit.select_action(state_vector)
-
-                    latency_ms = (time.time() - start_time) * 1000
-
-                    await websocket.send_json({
-                        "answer": rag_result["context"][:200] + "...",
-                        "is_on_topic": rag_result["is_on_topic"],
-                        "action": action,
-                        "latency_ms": latency_ms,
-                        "cached": rag_result.get("cached", False),
-                        "timestamp": datetime.utcnow().isoformat()
-                    })
-
-                    logger.info(
-                        f"WS Response: {session_id} "
-                        f"(latency: {latency_ms:.1f}ms, action: {action})"
-                    )
-
+                result = await _run_chat(question, hoe_level)
+                await websocket.send_json({
+                    **result,
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
             except Exception as e:
                 logger.error(f"WS processing failed: {e}")
                 await websocket.send_json({
                     "error": str(e),
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
                 })
 
     except asyncio.TimeoutError:
@@ -392,56 +357,43 @@ async def websocket_adapt(websocket: WebSocket, session_id: str):
 
 
 # ============================================================
-# EVENT LOGGING ENDPOINT
+# EVENT LOGGING
 # ============================================================
 
 @app.post("/api/events", response_model=dict)
 async def log_event(event: EventRequest):
-    """Log learner interaction event."""
     try:
         async with db.get_session() as session:
             event_id = await event_service.log_event(session, event)
-
             return {
                 "status": "logged",
                 "event_id": event_id,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
-
     except Exception as e:
-        logger.error(f"❌ Event logging failed: {e}")
+        logger.error(f"Event logging failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
-# ROOT ENDPOINT
+# ROOT
 # ============================================================
 
 @app.get("/")
 async def root():
-    """Root endpoint with service info."""
     return {
         "service": "Eidovia",
         "version": "1.0.0",
         "endpoints": {
             "health": "/health",
-            "chat": "/api/chat (POST)",
+            "chat": "/api/chat (POST, optional hoe_level 1-4)",
             "websocket": "/ws/adapt/{session_id} (WebSocket)",
             "cache_stats": "/api/cache-stats (GET)",
-            "cache_flush": "/api/cache-flush (POST)"
+            "cache_flush": "/api/cache-flush (POST)",
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
-# ============================================================
-# MAIN
-# ============================================================
-
 if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host=config.API_HOST,
-        port=config.API_PORT,
-        workers=1
-    )
+    uvicorn.run(app, host=config.API_HOST, port=config.API_PORT, workers=1)
