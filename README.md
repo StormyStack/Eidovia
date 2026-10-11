@@ -1,174 +1,107 @@
 # Eidovia
 
 An augmented reality mobile app that teaches biology using adaptive AI.
-Students ask questions in a chat interface — the AI retrieves relevant content from a curriculum
-and gives personalized answers. AR scenes (Unity) bring the biology to life.
+Students ask questions in a chat interface — the AI generates personalized answers directly via a local LLM (**Phi-4 mini on Ollama :11434**). AR scenes bring the biology to life.
 
-> Thesis project · React Native · FastAPI · PostgreSQL + pgvector · Redis · Docker
+> Thesis project · React Native (Expo SDK 57) · FastAPI · PostgreSQL 16 + pgvector · Redis 7 · Ollama (Phi-4 mini) · Docker
 
 ---
 
-## How It Works
+## Architecture
 
 ```
  Phone (Expo Go)
       │
       │  REST / JSON
       ▼
- API Gateway  ──── PostgreSQL  (users, modules, auth)
+ API Gateway (8000) ────── PostgreSQL 16 (6543) [users, modules, auth]
+      │             ────── Redis 7 (6379)       [cache]
       │
-      │  HTTP
+      │  HTTP (Docker internal: http://ollama:11434)
       ▼
- AI Service   ──── pgvector    (curriculum embeddings)
-              ──── Redis       (response cache)
+ Ollama (11434)     ────── Phi-4 mini local LLM (Handles AI Messaging directly)
 ```
 
-1. The **mobile app** handles login, the module catalogue, and the chat screen.
-2. The **API Gateway** handles all auth (JWT), user profiles, and module data.
-3. The **AI Service** takes a student's question, finds the closest curriculum chunks using vector similarity, and returns an answer. Repeated questions are served from Redis cache (~4 ms vs ~300 ms cold).
+- **All backend services run via Docker Compose**:
+  - `eidovia_postgres` (port `6543`) — Database with pgvector
+  - `eidovia_redis` (port `6379`) — Cache
+  - `eidovia_ollama` (port `11434`) — Local AI runtime running Phi-4 mini with GPU acceleration
+  - `eidovia_gateway` (port `8000`) — API Gateway (proxies chat directly to Ollama)
+- **Mobile Client**:
+  - `apps/mobile` (Expo SDK 57) connects to API Gateway on port `8000`
 
 ---
 
-## Tech Stack
+## Tech Stack & Ports
 
-| Layer | Technology |
-|---|---|
-| Mobile | React Native 0.86, Expo SDK 57, TypeScript |
-| API Gateway | Python, FastAPI, SQLAlchemy 2 async, asyncpg |
-| AI Service | Python, FastAPI, pgvector, sentence-transformers, Redis |
-| Database | PostgreSQL 16 with pgvector extension |
-| Cache | Redis 7 |
-| Runtime | Docker (all backend services run in containers) |
+| Service / Container | Port | Host URL | Description |
+|---|---|---|---|
+| **API Gateway** | `8000` | http://localhost:8000/docs | Auth, profiles, module catalogue, AI chat proxy |
+| **Ollama (AI Container)** | `11434` | http://localhost:11434 | Local LLM inference (Phi-4 mini) handling AI messaging |
+| **PostgreSQL** | `6543` | `localhost:6543` | Relational & vector database |
+| **Redis** | `6379` | `localhost:6379` | Response & session caching |
 
 ---
 
-## Folder Structure
+## Configuration & Network
 
-```
-Thesis/
-├── docker-compose.yml        all 4 backend services
-├── .env                      secrets (never committed)
-├── .env.example              template — copy this to .env
-│
-├── services/
-│   ├── ai/                   AI microservice (port 8001)
-│   │   ├── app/              FastAPI app code
-│   │   ├── data/             curriculum text files
-│   │   ├── migrations/       SQL schema files
-│   │   └── scripts/          load_curriculum.py
-│   │
-│   └── gateway/              API gateway (port 8000)
-│       ├── app/              FastAPI app code
-│       ├── migrations/       SQL schema files
-│       └── scripts/          setup_db.py
-│
-└── apps/
-    └── mobile/               React Native app (Expo)
-        ├── src/
-        └── .env              EXPO_PUBLIC_API_URL only
-```
+- Unified environment file: [`.env`](.env)
+- Mobile configuration: [`apps/mobile/.env`](apps/mobile/.env)
+- Active PC Wi-Fi IP is set to: **`10.14.5.133`**
+  - `EXPO_PUBLIC_API_URL=http://10.14.5.133:8000`
 
 ---
 
-## Prerequisites
+## How to Run Everything (3 Steps)
 
-| Tool | Notes |
-|---|---|
-| Docker Desktop | Must be running |
-| Node.js 18+ | For the mobile app |
-| Expo Go | Install on your phone (SDK 57) |
+### Step 1: Start All Backend Services (Docker)
 
-No local Python needed — all backend runs inside Docker.
-
----
-
-## First-Time Setup
-
-**Step 1 — Create your secrets file**
-
-```powershell
-Copy-Item .env.example .env
-notepad .env
-```
-
-Fill in these 4 values:
-
-| Variable | What to put |
-|---|---|
-| `DB_PASSWORD` | Any strong password |
-| `REDIS_PASSWORD` | Any strong password |
-| `JWT_SECRET` | Random string ≥ 32 chars. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| `EXPO_PUBLIC_API_URL` | `http://<YOUR-PC-LAN-IP>:8000` — find your IP with `ipconfig` |
-
-**Step 2 — Start all backend services**
+From project root (`Thesis/`):
 
 ```powershell
 docker compose up -d --build
+docker compose ps
 ```
 
-This starts PostgreSQL, Redis, the AI service, and the API Gateway. First build takes a few minutes (downloads PyTorch). Subsequent starts are instant.
+*Starts `eidovia_postgres`, `eidovia_redis`, `eidovia_ollama`, and `eidovia_gateway`.*
 
-**Step 3 — Seed the database** *(one time only)*
+---
+
+### Step 2: Initialize Database & Models *(First time only)*
 
 ```powershell
+# 1. Pull Phi-4 mini in Ollama:
+docker exec eidovia_ollama ollama pull phi4-mini
+
+# 2. Seed database tables, demo student, and AR module catalogue:
 docker exec -i eidovia_gateway python -m scripts.setup_db
 ```
 
-Creates tables, loads the module catalogue, and adds a demo user.
+---
 
-**Step 4 — Load the biology curriculum** *(one time only)*
+### Step 3: Start the Mobile App
 
-```powershell
-docker exec -it eidovia_ai python -m scripts.load_curriculum
-```
-
-Converts the curriculum text into vector embeddings stored in PostgreSQL. Takes ~30 seconds.
-
-**Step 5 — Run the mobile app**
+In a separate terminal window:
 
 ```powershell
 cd apps\mobile
-npm install
-# Confirm apps\mobile\.env has: EXPO_PUBLIC_API_URL=http://<YOUR-PC-LAN-IP>:8000
-
-$env:REACT_NATIVE_PACKAGER_HOSTNAME = "<YOUR-PC-LAN-IP>"
+$env:REACT_NATIVE_PACKAGER_HOSTNAME = "10.14.5.133"
 npx expo start --go --clear
 ```
 
-Scan the QR code with **Expo Go** on your phone. Phone must be on the same Wi-Fi as your PC.
+1. Ensure your physical phone and PC are connected to the **same Wi-Fi network**.
+2. Open **Expo Go** on your phone.
+3. Scan the displayed QR code to launch the application.
 
 ---
 
-## Day-to-Day Start
+## Stopping Services
 
 ```powershell
-# Backend (from repo root)
-docker compose up -d
+# Stop all Docker containers (preserves volume data):
+docker compose stop
 
-# Mobile
-cd apps\mobile
-npx expo start --go --clear
-```
-
----
-
-## Ports
-
-| Service | Port | URL |
-|---|---|---|
-| API Gateway | `8000` | http://localhost:8000/docs |
-| AI Service | `8001` | http://localhost:8001/health |
-| PostgreSQL | `6543` (host) | — |
-| Redis | `6379` | — |
-
-> Port `5432` is blocked by Windows Hyper-V — that's why PostgreSQL maps to `6543` on the host.
-> Inside Docker, containers still talk to each other on `5432`.
-
----
-
-## Stop Everything
-
-```powershell
+# Tear down containers:
 docker compose down
 ```
 
@@ -176,18 +109,6 @@ docker compose down
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| `bind: access denied` on port 5432 | Expected on Windows. Already handled — host port is `6543`. |
-| Container won't start | Check logs: `docker logs eidovia_ai --tail 50` |
-| Chat returns no results | Re-run: `docker exec -it eidovia_ai python -m scripts.load_curriculum` |
-| Phone can't reach the backend | Check Wi-Fi — phone and PC must be on the same network. Set Windows network to **Private**. |
-| QR code shows wrong IP | Set `$env:REACT_NATIVE_PACKAGER_HOSTNAME` to your actual LAN IP before running Expo. |
-
----
-
-## Service Docs
-
-- [AI Service](services/ai/README.md)
-- [API Gateway](services/gateway/README.md)
-- [Mobile App](apps/mobile/README.md)
+- **Phone cannot reach backend**: Ensure Windows Network Profile is set to **Private** so Windows Firewall permits incoming connections on port `8000`.
+- **IP changed**: Check current IP with `ipconfig` and update `EXPO_PUBLIC_API_URL` in `.env` and `apps/mobile/.env`.
+- **Swagger Docs**: Test backend endpoints directly at [http://localhost:8000/docs](http://localhost:8000/docs).

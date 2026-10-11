@@ -1,7 +1,5 @@
 # docker-compose.yml, run from repo root (Thesis/)
-# Containers: PostgreSQL (pgvector), Redis, Ollama (Phi-4 mini + all-minilm)
-# AI service and gateway run on the host with uvicorn (no Docker image needed)
-
+# Containers: PostgreSQL (pgvector), Redis, Ollama (Phi-4 mini), and API Gateway
 
 services:
   postgres:
@@ -18,6 +16,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./services/ai/migrations/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./services/ai/migrations/002_events.sql:/docker-entrypoint-initdb.d/002_events.sql:ro
+      - ./services/ai/migrations/003_hoe_levels.sql:/docker-entrypoint-initdb.d/003_hoe_levels.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eidovia}"]
       interval: 5s
@@ -25,7 +24,6 @@ services:
       retries: 10
     networks:
       - eidovia_network
-
 
   redis:
     image: redis:7-alpine
@@ -47,7 +45,6 @@ services:
     networks:
       - eidovia_network
 
-
   ollama:
     image: ollama/ollama:latest
     container_name: eidovia_ollama
@@ -58,8 +55,6 @@ services:
       - ollama_models:/root/.ollama
     environment:
       - OLLAMA_KEEP_ALIVE=30m
-    # GPU access (needs NVIDIA drivers + Docker GPU support on the host).
-    # Remove this block on a machine without an NVIDIA GPU.
     deploy:
       resources:
         reservations:
@@ -70,12 +65,39 @@ services:
     networks:
       - eidovia_network
 
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    image: thesis-gateway:latest
+    container_name: eidovia_gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-8080}:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - OLLAMA_URL=http://ollama:11434
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ./services/gateway/app:/app/app
+      - ./services/gateway/scripts:/app/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eidovia_network
 
 volumes:
   pgdata:
   redisdata:
   ollama_models:
-
 
 networks:
   eidovia_network:
