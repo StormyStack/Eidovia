@@ -1,6 +1,7 @@
-# docker-compose.yml — run from repo root (Thesis/)
-# Orchestrates: PostgreSQL, Redis, AI service
-# Gateway runs locally (uvicorn) for hot-reload during dev
+# docker-compose.yml, run from repo root (Thesis/)
+# Containers: PostgreSQL (pgvector), Redis, Ollama (Phi-4 mini + embeddings)
+# AI service and gateway run on the host with uvicorn (no Docker image needed)
+
 
 services:
   postgres:
@@ -25,6 +26,7 @@ services:
     networks:
       - eidovia_network
 
+
   redis:
     image: redis:7-alpine
     container_name: eidovia_redis
@@ -45,52 +47,24 @@ services:
     networks:
       - eidovia_network
 
-  ai-service:
-    build:
-      context: ./services/ai     # Dockerfile lives in services/ai/
-      dockerfile: Dockerfile
-    container_name: eidovia_ai
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: eidovia_ollama
     restart: unless-stopped
     ports:
-      - "${API_PORT:-8001}:8001"
-    env_file:
-      - .env                     # root .env — single source of truth
-    environment:
-      - DATABASE_HOST=postgres   # override to use Docker service name
-      - DATABASE_PORT=5432       # inside docker network postgres listens on 5432
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - "11434:11434"
+    volumes:
+      # Reuses the models already on this PC (phi4-mini), so nothing downloads twice
+      - C:/Users/Dell/.ollama:/root/.ollama
     networks:
       - eidovia_network
 
-  gateway:
-    build:
-      context: ./services/gateway
-      dockerfile: Dockerfile
-    container_name: eidovia_gateway
-    restart: unless-stopped
-    ports:
-      - "${GATEWAY_PORT:-8000}:8000"
-    env_file:
-      - .env
-    environment:
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - AI_SERVICE_URL=http://ai-service:8001
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - eidovia_network
 
 volumes:
   pgdata:
   redisdata:
+
 
 networks:
   eidovia_network:
