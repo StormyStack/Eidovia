@@ -754,6 +754,7 @@
                                     <option value="account">Accounts (sign-up, login, logout)</option>
                                     <option value="chat">AI chat</option>
                                     <option value="ar">AR game</option>
+                                    <option value="wildcard">Wildcards</option>
                                 </select>
                                 <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">Refresh</button>
                             </div>
@@ -809,12 +810,14 @@
             <div id="uh-summary"><div style="color:var(--text-muted);">Loading…</div></div>
             <div style="display:flex; gap:0.75rem; align-items:center; margin:0.5rem 0 0.75rem;">
                 <button class="btn btn-primary btn-sm" onclick="loadUserDetailLog()">Detail log</button>
+                <button class="btn btn-secondary btn-sm" id="uh-gift" onclick="if (uhUserId) openGift(uhUserId, uhUsername)">+ Wildcards</button>
                 <label style="font-size:0.8rem; display:flex; gap:0.3rem; align-items:center;"><input type="checkbox" id="uh-requests" checked onchange="if (uhDetailLoaded) loadUserDetailLog()"> include technical requests</label>
                 <select id="uh-filter" class="form-control" style="width:170px;" onchange="filterUserDetailLog()">
                     <option value="all">Everything</option>
                     <option value="account">Account (sign-up, login, logout, app opened)</option>
                     <option value="chat">AI chat</option>
                     <option value="ar">AR game</option>
+                    <option value="wildcard">Wildcards</option>
                     <option value="request">Technical requests</option>
                 </select>
                 <button class="btn btn-secondary btn-sm" onclick="exportUserDetailLog()">Export CSV</button>
@@ -843,7 +846,6 @@
         <div class="modal">
             <h3>Give wildcards</h3>
             <p id="ar-gift-subtitle" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;"></p>
-            <input type="hidden" id="ar-gift-index">
             <div class="form-group">
                 <label>How many wildcards (1-10)</label>
                 <input type="number" id="ar-gift-amount" class="form-control" min="1" max="10" value="1">
@@ -951,6 +953,16 @@
         <div class="modal">
             <h3 id="ticket-modal-title">Support Ticket Assistance</h3>
             <input type="hidden" id="ticket-id-val">
+            <input type="hidden" id="ticket-index-val">
+            <div id="ticket-message-val" style="font-size:0.85rem; background:#f8fafc; border:1px solid var(--border); border-radius:0.5rem; padding:0.6rem 0.75rem; margin-bottom:1rem; white-space:pre-wrap;"></div>
+            <div id="ticket-wild" style="display:none; border:1px solid #fde68a; background:#fffbeb; border-radius:0.5rem; padding:0.75rem; margin-bottom:1rem;">
+                <div style="font-weight:600; margin-bottom:0.4rem;">Wildcard request · asked for <span id="ticket-wild-asked">1</span></div>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input type="number" id="ticket-wild-amount" class="form-control" style="width:90px;" min="1" max="10" value="1">
+                    <button class="btn btn-primary btn-sm" onclick="giveTicketWildcards(Number(document.getElementById('ticket-index-val').value), Number(document.getElementById('ticket-wild-amount').value), document.getElementById('ticket-notes-val').value)">Give &amp; resolve</button>
+                </div>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">Cards go to the learner's default wildcards; the reply below is shown in the app. To decline, set Resolved with a reply.</div>
+            </div>
             <div class="form-group">
                 <label>Status</label>
                 <select id="ticket-status-val" class="form-control">
@@ -968,7 +980,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label>Admin Resolution Notes / Reply</label>
+                <label>Admin Resolution Notes / Reply (the learner sees this for wildcard requests)</label>
                 <textarea id="ticket-notes-val" class="form-control" rows="4" placeholder="Enter support notes or action taken..."></textarea>
             </div>
             <div class="modal-actions">
@@ -1165,6 +1177,7 @@
                         <td>${dateStr}</td>
                         <td style="text-align: right; white-space: nowrap;">
                             <button class="btn btn-primary btn-sm" onclick="openUserHistory('${u.user_id}')">History</button>
+                            ${u.is_admin ? '' : `<button class="btn btn-secondary btn-sm" onclick="openGift('${u.user_id}', '${esc(u.username)}')">+ Wildcards</button>`}
                             <button class="btn btn-secondary btn-sm" onclick='openEditUserModal(${JSON.stringify(u)})'>Edit</button>
                             <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal('${u.user_id}', '${u.username}')">Reset Key</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.user_id}', '${u.username}')">Delete</button>
@@ -1184,6 +1197,7 @@
         }
 
         /* SUPPORT TICKETS */
+        let ticketRows = [];
         async function fetchTickets() {
             try {
                 const res = await fetch('/admin/support/tickets', { headers: {'Authorization': 'Bearer ' + jwtToken} });
@@ -1195,19 +1209,30 @@
                     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b;">No support tickets open.</td></tr>';
                     return;
                 }
-                tickets.forEach(t => {
+                ticketRows = tickets;
+                tickets.forEach((t, i) => {
                     const tr = document.createElement('tr');
                     const dateStr = t.created_at ? new Date(t.created_at).toLocaleString() : '-';
+                    const wild = t.kind === 'wildcard';
+                    const reset = t.kind === 'password_reset';
+                    const resolved = t.status === 'resolved';
+                    const msg = (t.message || '').length > 140 ? t.message.slice(0, 140) + '…' : (t.message || '');
+                    const notes = (wild && t.granted_amount ? `<strong style="color:#166534;">Gave ${t.granted_amount} wildcard${t.granted_amount === 1 ? '' : 's'}.</strong> ` : '') + esc(t.admin_notes || (t.granted_amount ? '' : 'None'));
+                    // resolved tickets cannot be managed any more
+                    const actions = resolved
+                        ? '<span style="font-size:0.8rem; color:var(--text-muted);">Resolved</span>'
+                        : (wild ? `<button class="btn btn-primary btn-sm" onclick="giveTicketWildcards(${i}, ${t.requested_amount || 1})">Give ${t.requested_amount || 1}</button> ` : '') +
+                          (reset ? `<button class="btn btn-primary btn-sm" onclick="openResetPasswordModal('${esc(t.user_id)}', '${esc(t.username)}')">Reset password</button> ` : '') +
+                          `<button class="btn btn-secondary btn-sm" onclick="openAssistTicketModal(${i})">Manage</button>`;
                     tr.innerHTML = `
-                        <td style="font-weight:600;">${t.subject}</td>
-                        <td>${t.username}</td>
+                        <td style="max-width:320px;"><div style="font-weight:600;">${esc(t.subject)}${wild ? ' <span class="badge badge-in_progress">Wildcard request</span>' : ''}${reset ? ' <span class="badge badge-high">Password reset</span>' : ''}</div>
+                            <div style="font-size:0.8rem; color:#64748b; margin-top:0.2rem;">${wild ? 'Reason: ' : ''}${esc(msg)}</div></td>
+                        <td>${esc(t.username)}<div><a href="#" style="font-size:0.75rem;" onclick="openUserHistory('${esc(t.user_id)}'); return false;">history</a></div></td>
                         <td><span class="badge badge-${t.priority}">${t.priority.toUpperCase()}</span></td>
                         <td><span class="badge badge-${t.status}">${t.status.replace('_', ' ').toUpperCase()}</span></td>
                         <td>${dateStr}</td>
-                        <td style="font-size:0.8rem; color:#64748b; max-width:200px;">${t.admin_notes || 'None'}</td>
-                        <td style="text-align: right;">
-                            <button class="btn btn-secondary btn-sm" onclick='openAssistTicketModal(${JSON.stringify(t)})'>Manage</button>
-                        </td>
+                        <td style="font-size:0.8rem; color:#64748b; max-width:220px;">${notes}</td>
+                        <td style="text-align: right; white-space:nowrap;">${actions}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -1270,16 +1295,21 @@
             logout:               ['Logged out',       'account', 'badge-student'],
             message_sent:         ['AI chat',          'chat',    'badge-admin'],
             app_open:             ['Opened the app',   'account', 'badge-student'],
+            profile_updated:      ['Updated profile',  'account', 'badge-student'],
+            password_changed:     ['Changed password', 'account', 'badge-admin'],
+            password_reset_requested: ['Forgot password', 'account', 'badge-high'],
+            password_reset_by_admin:  ['Password reset',  'account', 'badge-admin'],
             ar_session_start:     ['Opened AR game',   'ar',      'badge-student'],
             ar_part_discovered:   ['Found a part',     'ar',      'badge-admin'],
             ar_stage_completed:   ['Level completed',  'ar',      'badge-resolved'],
             ar_journey_completed: ['Finished journey', 'ar',      'badge-resolved'],
             ar_session_end:       ['Closed AR game',   'ar',      'badge-student'],
-            ar_wildcard_used:     ['Used wildcard',    'ar',      'badge-in_progress'],
+            wildcard_used:        ['Used wildcard',    'wildcard','badge-in_progress'],
             ar_previous_used:     ['Went back',        'ar',      'badge-student'],
-            ar_wildcard_earned:   ['Earned wildcard',  'ar',      'badge-resolved'],
-            ar_daily_gift:        ['Daily gift',       'ar',      'badge-resolved'],
-            ar_wildcards_granted: ['Wildcards given',  'ar',      'badge-admin'],
+            wildcard_earned:      ['Earned wildcard',  'wildcard','badge-resolved'],
+            wildcard_daily_gift:  ['Daily gift',       'wildcard','badge-resolved'],
+            wildcards_granted:    ['Wildcards given',  'wildcard','badge-admin'],
+            wildcard_requested:   ['Asked for wildcards','wildcard','badge-in_progress'],
         };
         /* wallet after the event: total = gift + default (the learner only sees the total) */
         function walletText(d, totalKey = 'total') {
@@ -1305,6 +1335,11 @@
                 case 'login': return 'Signed in to the app.';
                 case 'logout': return 'Signed out of the app.';
                 case 'app_open': return d.reason === 'resume' ? 'Came back to the app.' : 'Opened the app.';
+                case 'profile_updated': return 'Changed profile: ' + esc((d.changed || []).join(', ')) +
+                    (d.level ? ` (level ${d.level})` : '') + (d.age ? ` (age ${d.age})` : '') + (d.gender ? ` (${esc(d.gender)})` : '') + '.';
+                case 'password_changed': return 'Changed the password from the app.';
+                case 'password_reset_requested': return 'Asked support to reset the password (forgot password).<div class="log-sub">see User Support</div>';
+                case 'password_reset_by_admin': return `Admin <strong>${esc(d.by)}</strong> reset the password.`;
                 case 'message_sent': {
                     const how = d.fallback ? 'AI was offline, a fallback message was shown'
                         : d.cached ? `answered instantly from the cache (${ms(d.latency_ms)})`
@@ -1329,21 +1364,27 @@
                     if (d.ar === false) t += '<div class="log-sub">3D mode: this phone has no AR support</div>';
                     return t;
                 }
-                case 'ar_wildcard_used': {
-                    const what = d.mode === 'jump'
+                case 'wildcard_used': {
+                    const what = d.feature && d.feature !== 'ar'
+                        ? `${esc(d.feature)} · ${esc(d.action)}`
+                        : d.mode === 'jump'
                         ? `power jump from <strong>${esc(lvName(d.from_level, d.from_name))}</strong> to <strong>${esc(lvName(d.to_level, d.to_name))}</strong>`
                         : `skip <strong>${esc(lvName(d.from_level, d.from_name))}</strong>`;
                     if (d.paid === false) return `Tried a wildcard ${what} (${cards(d.cost)}) but did not have enough cards.` + walletText(d, 'wildcards_left');
                     const paid = `paid ${d.from_gift} from gift + ${d.from_default} from default`;
-                    return `Used a wildcard to ${what} (${cards(d.cost)}: ${paid}).` + walletText(d, 'wildcards_left');
+                    return `Used a wildcard${d.feature && d.feature !== 'ar' ? ' for' : ' in the AR game to'} ${what} (${cards(d.cost)}: ${paid}).` + walletText(d, 'wildcards_left');
                 }
-                case 'ar_wildcard_earned':
-                    return `Earned 1 wildcard (default) by passing <strong>${esc(levelText(d))}</strong>.` + walletText(d);
-                case 'ar_daily_gift':
+                case 'wildcard_earned':
+                    return (d.feature && d.feature !== 'ar'
+                        ? `Earned 1 wildcard (default): ${esc(d.feature)} · ${esc(d.reason)}.`
+                        : `Earned 1 wildcard (default) by passing <strong>${esc(levelText(d))}</strong> in the AR game.`) + walletText(d);
+                case 'wildcard_daily_gift':
                     return `Daily gift: +${cards(d.added)} to gift (gift max 6).` + walletText(d);
                 case 'ar_previous_used':
                     return `Went back from <strong>${esc(lvName(d.from_level, d.from_name))}</strong> to <strong>${esc(lvName(d.to_level, d.to_name))}</strong> with the Back button.`;
-                case 'ar_wildcards_granted':
+                case 'wildcard_requested':
+                    return `Asked an admin for ${cards(d.amount)}: <q>${esc(d.reason)}</q><div class="log-sub">see User Support</div>`;
+                case 'wildcards_granted':
                     return `Admin <strong>${esc(d.by)}</strong> gave ${cards(d.amount)} (added to default).` + walletText(d);
                 default: return esc(log.action);
             }
@@ -1390,7 +1431,8 @@
                 const log = JSON.parse(event.data);
                 appendLogRow(log, true);
                 fetchStats();
-                if (log.action && log.action.startsWith('ar_')) scheduleArRefresh();
+                if (log.action && (log.action.startsWith('ar_') || log.action.startsWith('wildcard'))) scheduleArRefresh();
+                if (log.action === 'wildcard_requested' || log.action === 'password_reset_requested') fetchTickets();
             };
 
             ws.onclose = () => {
@@ -1495,7 +1537,7 @@
         function renderArPlayers(players) {
             const tbody = document.getElementById('ar-players-body');
             if (!players.length) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:2rem;">No AR activity yet. Learners appear here after they open "Explore DNA in AR" in the app.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:2rem;">No AR activity yet. Learners appear here after they open "Explore DNA in AR" in the app. To give wildcards before that, use "+ Wildcards" in Users &amp; Accounts.</td></tr>';
                 return;
             }
             tbody.innerHTML = players.map((p, i) => `<tr>
@@ -1563,18 +1605,27 @@
             URL.revokeObjectURL(a.href);
         }
 
+        /* Give wildcards: from the AR players table, the Users tab or a user's history */
+        let giftTarget = null;
         function openArGift(index) {
             const p = arPlayers[index];
-            if (!p) return;
-            document.getElementById('ar-gift-index').value = index;
+            if (p) openGift(p.user_id, p.username);
+        }
+        async function openGift(userId, username) {
+            giftTarget = { user_id: userId, username };
             document.getElementById('ar-gift-amount').value = 1;
-            document.getElementById('ar-gift-subtitle').textContent = `For ${p.username}` +
-                (p.wallet_total !== null ? ` · has ${p.wallet_total} (${p.wallet_gift} gift + ${p.wallet_default} default)` : '') +
-                (p.admin_given ? ` · admins gave ${p.admin_given} so far` : '');
+            const sub = document.getElementById('ar-gift-subtitle');
+            sub.textContent = `For ${username}`;
             document.getElementById('ar-gift-modal').style.display = 'flex';
+            try {   // show what the learner has now (total = gift + default)
+                const u = await arGet('/admin/users/' + encodeURIComponent(userId) + '/log-summary');
+                if (giftTarget && giftTarget.user_id === userId) {
+                    sub.textContent = `For ${username}` + (u.wallet ? ` · has ${u.wallet.total} (${u.wallet.gift} gift + ${u.wallet.default} default)` : ' · no wildcards yet (starts with 3)');
+                }
+            } catch(e) { /* subtitle stays short */ }
         }
         async function submitArGift() {
-            const p = arPlayers[document.getElementById('ar-gift-index').value];
+            const p = giftTarget;
             const amount = parseInt(document.getElementById('ar-gift-amount').value, 10);
             if (!p) return;
             if (!(amount >= 1 && amount <= 10)) { alert('Choose 1 to 10 wildcards.'); return; }
@@ -1588,11 +1639,16 @@
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    alert('Error: ' + (typeof err.detail === 'string' ? err.detail : 'Could not give wildcards'));
+                    const why = typeof err.detail === 'string' ? err.detail
+                        : err.detail ? JSON.stringify(err.detail) : `server error (HTTP ${res.status}); see: docker compose logs admin`;
+                    alert('Could not give wildcards: ' + why);
                     return;
                 }
+                const r = await res.json().catch(() => null);
                 closeModal('ar-gift-modal');
+                if (r) alert(`Gave ${r.amount} wildcard${r.amount === 1 ? '' : 's'} to ${r.username}. They now have ${r.total} (${r.gift} gift + ${r.default} default).`);
                 fetchAr();
+                if (uhUserId === p.user_id && document.getElementById('user-history-modal').style.display === 'flex') openUserHistory(p.user_id);
             } catch(e) { alert(e.message); }
             finally { btn.disabled = false; }
         }
@@ -1695,7 +1751,7 @@
         }
 
         /* USER HISTORY (support) */
-        let uhUserId = null, uhDetail = [], uhDetailLoaded = false;
+        let uhUserId = null, uhUsername = '', uhDetail = [], uhDetailLoaded = false;
         function hist(k, v, s = '') { return `<div class="hist"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`; }
         async function openUserHistory(userId) {
             uhUserId = userId; uhDetail = []; uhDetailLoaded = false;
@@ -1708,7 +1764,12 @@
             try {
                 const u = await arGet('/admin/users/' + encodeURIComponent(userId) + '/log-summary');
                 document.getElementById('uh-title').textContent = 'User history · ' + u.username;
-                document.getElementById('uh-sub').innerHTML = `${esc(u.email)} · ${u.is_admin ? 'Admin' : 'Learner'} · user id <span class="mono">${esc(u.user_id)}</span>`;
+                uhUsername = u.username;
+                document.getElementById('uh-gift').style.display = u.is_admin ? 'none' : '';
+                const LEVELS = {1: 'Beginner', 2: 'Intermediate', 3: 'Advanced'};
+                document.getElementById('uh-sub').innerHTML = `${esc(u.email)} · ${u.is_admin ? 'Admin' : 'Learner'} · ${LEVELS[u.level] || 'Level ' + u.level}` +
+                    (u.age ? ` · age ${u.age}` : '') + (u.gender ? ` · ${esc(u.gender.replace(/_/g, ' '))}` : '') +
+                    ` · user id <span class="mono">${esc(u.user_id)}</span>`;
                 const status = u.logged_in_now
                     ? `<span class="dot ${u.active_now ? 'dot-on' : 'dot-idle'}"></span>${u.active_now ? 'Active now' : 'Logged in'}`
                     : 'Logged out';
@@ -1724,7 +1785,7 @@
                         ${hist('Last question', fmtDate(u.last_question))}
                         ${hist('AR sessions', u.ar_sessions, `${fmtDuration(u.ar_seconds)} played · last ${fmtDate(u.last_ar)}`)}
                         ${hist('Levels passed', u.levels_passed, `${u.journeys} journeys finished`)}
-                        ${hist('Wildcards', w ? w.total : '--', w ? `${w.gift} gift + ${w.default} default · ${u.wildcards_used} used` : 'no wallet yet')}
+                        ${hist('Wildcards', w ? w.total : '--', (w ? `${w.gift} gift + ${w.default} default · ` : 'no wallet yet · ') + `${u.wildcards_used} used · ${u.wildcard_requests} requests`)}
                         ${hist('Back button', u.back_used + '×')}
                         ${hist('Support tickets', u.tickets, `${u.tickets_open} open`)}
                         ${hist('First activity', fmtDate(u.first_activity))}
@@ -1811,7 +1872,15 @@
             document.getElementById('reset-pwd-val').value = '';
             document.getElementById('reset-pwd-modal').style.display = 'flex';
         }
-        function openAssistTicketModal(ticket) {
+        function openAssistTicketModal(index) {
+            const ticket = ticketRows[index];
+            if (!ticket || ticket.status === 'resolved') return;
+            document.getElementById('ticket-index-val').value = index;
+            document.getElementById('ticket-message-val').textContent = ticket.message || '';
+            const wild = document.getElementById('ticket-wild');
+            wild.style.display = ticket.kind === 'wildcard' ? 'block' : 'none';
+            document.getElementById('ticket-wild-amount').value = ticket.requested_amount || 1;
+            document.getElementById('ticket-wild-asked').textContent = ticket.requested_amount || 1;
             document.getElementById('ticket-id-val').value = ticket.ticket_id;
             document.getElementById('ticket-modal-title').textContent = `Assist Ticket: ${ticket.subject}`;
             document.getElementById('ticket-status-val').value = ticket.status;
@@ -1886,8 +1955,10 @@
                     alert("Error: " + (err.detail || 'Password reset failed'));
                     return;
                 }
-                alert("Password successfully reset!");
+                const r = await res.json().catch(() => ({}));
+                alert("Password successfully reset!" + (r.requests_resolved ? `\nTheir "forgot password" request is marked resolved. Tell ${r.username} the new password (e.g. by email).` : ''));
                 closeModal('reset-pwd-modal');
+                fetchTickets(); fetchStats();
             } catch(e) { alert(e.message); }
         }
 
@@ -1905,6 +1976,25 @@
                 }
                 fetchUsers();
                 fetchStats();
+            } catch(e) { alert(e.message); }
+        }
+
+        async function giveTicketWildcards(index, amount, note) {
+            const t = ticketRows[index];
+            if (!t || t.status === 'resolved') return;
+            if (!(amount >= 1 && amount <= 10)) { alert('Choose 1 to 10 wildcards.'); return; }
+            if (note === undefined && !confirm(`Give ${amount} wildcard${amount === 1 ? '' : 's'} to ${t.username} and resolve the request?`)) return;
+            try {
+                const res = await fetch(`/admin/support/tickets/${t.ticket_id}/wildcards`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                    body: JSON.stringify({ amount, note: note || null })
+                });
+                const r = await res.json().catch(() => ({}));
+                if (!res.ok) { alert('Could not give wildcards: ' + (typeof r.detail === 'string' ? r.detail : r.detail ? JSON.stringify(r.detail) : `server error (HTTP ${res.status}); see: docker compose logs admin`)); return; }
+                closeModal('ticket-modal');
+                alert(`Gave ${amount} wildcard${amount === 1 ? '' : 's'} to ${t.username}. They now have ${r.wallet.total} (${r.wallet.gift} gift + ${r.wallet.default} default).`);
+                fetchTickets(); fetchStats(); fetchAr();
             } catch(e) { alert(e.message); }
         }
 

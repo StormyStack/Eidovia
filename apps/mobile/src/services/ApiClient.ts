@@ -125,7 +125,7 @@ export function configureApiAuth(options: { getToken: TokenGetter; onUnauthorize
 }
 
 /** Login/register must never carry an old token, and their 401s are form errors, not logouts. */
-const PUBLIC_AUTH_ROUTES = ['/api/auth/login', '/api/auth/register'];
+const PUBLIC_AUTH_ROUTES = ['/api/auth/login', '/api/auth/register', '/api/auth/password-reset-request'];
 
 function isPublicAuthRoute(url: string | undefined): boolean {
   if (!url) return false;

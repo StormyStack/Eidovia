@@ -2,7 +2,8 @@
  * Root navigation (PDF §1: "App.tsx — Root navigation (React Navigation stack)").
  *
  * 1. While authStore.restoreSession() runs → SplashScreen.
- * 2. Signed out → Login, SignUp.   Signed in → Topics → Dna (AR game, AI tutor, progress) → ARGame / Chat.
+ * 2. Signed out → Login, SignUp.   Signed in → Topics → Dna (AR game, AI tutor, progress) → ARGame / Chat;
+ *    Topics → Profile (details, password, wildcards, log out).
  * Signing in/out swaps the screen set; React Navigation moves to the right screen
  * automatically (never navigate to Topics manually after login).
  */
@@ -17,6 +18,8 @@ import type { RootStackParamList } from './navigation/types';
 import { ARGameScreen } from './screens/ARGameScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { DnaScreen } from './screens/DnaScreen';
+import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { SignUpScreen } from './screens/SignUpScreen';
 import { SplashScreen } from './screens/SplashScreen';
@@ -72,6 +75,7 @@ export default function App() {
               <Stack.Group>
                 <Stack.Screen name="Topics" component={TopicsScreen} options={{ title: brand.name }} />
                 <Stack.Screen name="Dna" component={DnaScreen} options={{ title: 'DNA' }} />
+                <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
                 <Stack.Screen name="ARGame" component={ARGameScreen} options={({ route }) => ({ title: route.params.title })} />
                 <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'AI Tutor' }} />
               </Stack.Group>
@@ -80,6 +84,7 @@ export default function App() {
                 {/* 'pop' makes logout/session-expiry animate like going back */}
                 <Stack.Screen name="Login" component={LoginScreen} options={{ animationTypeForReplace: 'pop' }} />
                 <Stack.Screen name="SignUp" component={SignUpScreen} />
+                <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
               </Stack.Group>
             )}
           </Stack.Navigator>

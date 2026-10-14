@@ -1,42 +1,33 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useLayoutEffect } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLayoutEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ScreenProps } from '../navigation/types';
 import { useAuthStore } from '../store/authStore';
 import { layout, palette, radius, shadow, spacing, typography } from '../theme';
 
-/** First screen after login: the topics to learn. DNA is the first (and for now the only) topic. */
+/** First screen after login: the topics to learn (DNA first). The header opens the Profile page. */
 export function TopicsScreen({ navigation }: ScreenProps<'Topics'>) {
   const username = useAuthStore((s) => s.profile?.username);
-  const logout = useAuthStore((s) => s.logout);
   const insets = useSafeAreaInsets();
-
-  const confirmLogout = useCallback(() => {
-    Alert.alert('Log out?', 'You will need to log in again to continue.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: () => void logout() },
-    ]);
-  }, [logout]);
-
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
         <Pressable
-          onPress={confirmLogout}
+          onPress={() => navigation.navigate('Profile')}
           accessibilityRole="button"
-          accessibilityLabel="Log out"
+          accessibilityLabel="Profile"
           hitSlop={10}
           style={styles.headerButton}
-          testID="logout-button"
+          testID="profile-button"
         >
-          <Ionicons name="log-out-outline" size={22} color={palette.primary} />
-          <Text style={styles.headerButtonText}>Log out</Text>
+          <Ionicons name="person-circle-outline" size={26} color={palette.primary} />
+          <Text style={styles.headerButtonText}>Profile</Text>
         </Pressable>
       ),
     });
-  }, [navigation, confirmLogout]);
+  }, [navigation]);
 
   return (
     <ScrollView

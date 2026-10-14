@@ -20,7 +20,9 @@ services:
       - ./services/ai/migrations/004_audit_logs.sql:/docker-entrypoint-initdb.d/004_audit_logs.sql:ro
       - ./services/ai/migrations/005_admin_user.sql:/docker-entrypoint-initdb.d/005_admin_user.sql:ro
       - ./services/ai/migrations/006_admin_support_maintenance.sql:/docker-entrypoint-initdb.d/006_admin_support_maintenance.sql:ro
-      - ./services/ai/migrations/007_ar_wallets.sql:/docker-entrypoint-initdb.d/007_ar_wallets.sql:ro
+      - ./services/ai/migrations/007_wildcard_wallets.sql:/docker-entrypoint-initdb.d/007_wildcard_wallets.sql:ro
+      - ./services/ai/migrations/008_support_ticket_kind.sql:/docker-entrypoint-initdb.d/008_support_ticket_kind.sql:ro
+      - ./services/ai/migrations/009_user_profile.sql:/docker-entrypoint-initdb.d/009_user_profile.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eidovia}"]
       interval: 5s

@@ -48,6 +48,11 @@ class SupportTicketCreate(BaseModel):
     priority: str = Field("medium", pattern="^(low|medium|high)$")
 
 
+class WildcardTicketAnswer(BaseModel):
+    amount: int = Field(..., ge=1, le=10)
+    note: Optional[str] = Field(None, max_length=500)
+
+
 class SupportTicketUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern="^(open|in_progress|resolved)$")
     admin_notes: Optional[str] = None
@@ -63,6 +68,9 @@ class SupportTicketResponse(BaseModel):
     status: str
     priority: str
     admin_notes: Optional[str] = None
+    kind: str = "general"                     # 'wildcard' = request from the app
+    requested_amount: Optional[int] = None
+    granted_amount: Optional[int] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

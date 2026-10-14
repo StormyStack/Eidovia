@@ -104,6 +104,17 @@ export function LoginScreen({ navigation }: ScreenProps<'Login'>) {
 
       <Button testID="login-submit" title={submitting ? 'Logging in…' : 'Log in'} onPress={submit} loading={submitting} />
 
+      <Pressable
+        onPress={() => navigation.navigate('ForgotPassword', { username: values.username.trim() })}
+        accessibilityRole="link"
+        hitSlop={12}
+        style={styles.forgot}
+        testID="go-to-forgot"
+        disabled={submitting}
+      >
+        <Text style={styles.link}>Forgot password?</Text>
+      </Pressable>
+
       <View style={styles.footer}>
         <Text style={styles.footerText}>New to {brand.name}?</Text>
         <Pressable onPress={goToSignUp} accessibilityRole="link" hitSlop={12} testID="go-to-signup" disabled={submitting}>
@@ -118,4 +129,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.xl, gap: spacing.xs, flexWrap: 'wrap' },
   footerText: typography.bodyMuted,
   link: { ...typography.body, color: palette.primary, fontWeight: '600' },
+  forgot: { alignSelf: 'center', marginTop: spacing.lg },
 });

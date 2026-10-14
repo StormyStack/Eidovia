@@ -6,7 +6,7 @@ import { isUnityAvailable, UnityBridge, UnityView, type UnityMessage } from '../
 import { Banner } from '../components/Banner';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { ScreenProps } from '../navigation/types';
-import { ArService } from '../services/ArService';
+import { WildcardService } from '../services/WildcardService';
 import { startArSession, type ArSession } from '../services/ArTelemetry';
 import type { ModuleConfig } from '../services/types';
 import { difficultyLabel, palette, radius, shadow, spacing, typography } from '../theme';
@@ -16,7 +16,7 @@ import { difficultyLabel, palette, radius, shadow, spacing, typography } from '.
  * Once Unity signals "ready" the screen sends it the module config; the game reports its progress
  * back through onMessage. The game itself makes no network calls; the screen reports the session to the
  * gateway (services/ArTelemetry) for the admin panel.
- * Wildcards come from the server wallet (services/ArService): synced when the game is ready and every 30 s
+ * Wildcards come from the app-wide server wallet (services/WildcardService): synced when the game is ready and every 30 s
  * (so an admin's gift or the daily gift shows up), and every use / earned card is paid on the server.
  * Unity runs only in an Android build that contains it (modules/eidovia-unity); in Expo Go and tests
  * the screen explains how to get that build instead.
@@ -103,7 +103,7 @@ function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params'
   useEffect(() => {
     if (!ready) return;
     const sync = () => {
-      ArService.syncWallet()
+      WildcardService.sync()
         .then((w) => sendWallet(w.total, w.added))
         .catch(() => undefined); // offline: the game keeps its last count, the next sync fixes it
     };
@@ -127,12 +127,16 @@ function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params'
           setNoArNote(!message.ar);
           break;
         case 'wildcard_used':
-          ArService.spendWildcard(message.mode, message.from + 1, message.to + 1, session.current?.sessionId ?? '')
+          WildcardService.spend('ar', message.mode, {
+            from_level: message.from + 1,
+            to_level: message.to + 1,
+            session_id: session.current?.sessionId,
+          })
             .then((total) => sendWallet(total))
             .catch(() => undefined);
           break;
         case 'wildcard_earned':
-          ArService.earnWildcard(message.stage + 1, session.current?.sessionId ?? '')
+          WildcardService.earn('ar', 'level_passed', { level: message.stage + 1, session_id: session.current?.sessionId })
             .then((total) => sendWallet(total))
             .catch(() => undefined);
           break;

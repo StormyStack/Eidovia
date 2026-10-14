@@ -21,7 +21,9 @@ class UserLogService:
     async def get_summary(user_id: str) -> Optional[dict[str, Any]]:
         async with db.get_session() as session:
             user = (await session.execute(text(
-                "SELECT user_id::text AS user_id, username, email, is_admin, language, created_at FROM users WHERE user_id::text = :u"
+                "SELECT user_id::text AS user_id, username, email, is_admin, language, created_at, detail_level, "
+                "to_jsonb(users) ->> 'age' AS age, to_jsonb(users) ->> 'gender' AS gender "   # age/gender: migration 009
+                "FROM users WHERE user_id::text = :u"
             ), {"u": user_id})).first()
             if not user:
                 return None
@@ -39,14 +41,15 @@ class UserLogService:
                     COALESCE(SUM({DURATION}) FILTER (WHERE action = 'ar_session_end'), 0)           AS ar_seconds,
                     COUNT(*) FILTER (WHERE action = 'ar_stage_completed' AND details->>'skipped' IS DISTINCT FROM 'true') AS levels_passed,
                     COUNT(*) FILTER (WHERE action = 'ar_journey_completed')                         AS journeys,
-                    COUNT(*) FILTER (WHERE action = 'ar_wildcard_used' AND details->>'paid' = 'true') AS wildcards_used,
+                    COUNT(*) FILTER (WHERE action = 'wildcard_used' AND details->>'paid' = 'true') AS wildcards_used,
                     COUNT(*) FILTER (WHERE action = 'ar_previous_used')                             AS back_used,
                     MIN(created_at)                                                                 AS first_activity,
                     MAX(created_at)                                                                 AS last_activity,
                     MAX(created_at) FILTER (WHERE action = 'login')                                 AS last_login,
                     MAX(created_at) FILTER (WHERE action = 'logout')                                AS last_logout,
                     MAX(created_at) FILTER (WHERE action = 'message_sent')                          AS last_question,
-                    MAX(created_at) FILTER (WHERE action LIKE 'ar\\_%')                             AS last_ar
+                    MAX(created_at) FILTER (WHERE action LIKE 'ar\\_%')                             AS last_ar,
+                    COUNT(*) FILTER (WHERE action = 'wildcard_requested')                            AS wildcard_requests
                 FROM audit_logs WHERE user_id = :u
             """), {"u": user_id})).first()
             ips = (await session.execute(text("""
@@ -67,7 +70,7 @@ class UserLogService:
                 tickets = None
             try:
                 wallet = (await session.execute(text(
-                    "SELECT gift_cards, default_cards FROM ar_wallets WHERE user_id = :u"
+                    "SELECT gift_cards, default_cards FROM wildcard_wallets WHERE user_id = :u"
                 ), {"u": user_id})).first()
             except Exception:
                 wallet = None
@@ -79,6 +82,9 @@ class UserLogService:
             "email": user.email,
             "is_admin": bool(user.is_admin),
             "signed_up_at": _iso(user.created_at),
+            "level": user.detail_level,
+            "age": int(user.age) if user.age else None,
+            "gender": user.gender,
             "logged_in_now": online is not None,
             "active_now": bool(online and online["active"]),
             "last_seen": online.get("last_seen") if online else None,
@@ -97,6 +103,7 @@ class UserLogService:
             "journeys": t.journeys or 0,
             "wildcards_used": t.wildcards_used or 0,
             "back_used": t.back_used or 0,
+            "wildcard_requests": t.wildcard_requests or 0,
             "wallet": ({"gift": wallet.gift_cards, "default": wallet.default_cards,
                         "total": wallet.gift_cards + wallet.default_cards} if wallet else None),
             "tickets": tickets.n if tickets else 0,

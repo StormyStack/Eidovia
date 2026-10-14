@@ -1,9 +1,12 @@
+import json
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional, Any
 from sqlalchemy import text
 from fastapi import HTTPException
 from db import db
+from redis_client import get_redis
 from security import hash_password
 from schemas import AdminUserCreate, AdminUserUpdate, AdminPasswordReset
 
@@ -189,7 +192,8 @@ class UserService:
             }
 
     @staticmethod
-    async def reset_password(user_id: str, data: AdminPasswordReset) -> dict[str, str]:
+    async def reset_password(user_id: str, data: AdminPasswordReset, admin_username: str = "admin") -> dict[str, Any]:
+        """Set a new password. Also resolves the user's open "forgot password" support requests."""
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -212,9 +216,28 @@ class UserService:
                 text("UPDATE users SET password_hash = :pwd_hash WHERE user_id = :uid"),
                 {"pwd_hash": pwd_hash, "uid": uid},
             )
+            resolved = 0
+            try:
+                resolved = len((await session.execute(text("""
+                    UPDATE support_tickets SET status = 'resolved', updated_at = now(),
+                        admin_notes = COALESCE(NULLIF(admin_notes, '') || ' ', '') || :note
+                    WHERE user_id = :u AND kind = 'password_reset' AND status <> 'resolved'
+                    RETURNING ticket_id
+                """), {"u": str(uid), "note": f"Password reset by {admin_username}."})).all())
+            except Exception:
+                pass    # support_tickets.kind not there yet (migration 008)
             await session.commit()
 
-        return {"status": "password_reset_success", "username": row.username}
+        try:
+            r = await get_redis()
+            await r.rpush("raw_audit_logs", json.dumps({
+                "action": "password_reset_by_admin", "user_id": str(uid), "username": row.username,
+                "details": {"by": admin_username, "requests_resolved": resolved},
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+        except Exception:
+            pass
+        return {"status": "password_reset_success", "username": row.username, "requests_resolved": resolved}
 
     @staticmethod
     async def delete_user(user_id: str, current_admin_id: str) -> dict[str, str]:

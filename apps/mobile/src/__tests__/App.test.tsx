@@ -16,6 +16,7 @@ import { asyncStorageData, jwtExpiringIn, resetDeviceStorage, secureStoreData } 
 const USER_ID = '3f8a1c2e-5b7d-4e9f-a1b2-c3d4e5f60718';
 const initialState = useAuthStore.getState();
 const LEVEL_NAMES = ['The building blocks', 'A nucleotide', 'A single strand', 'Two strands', 'The double helix'];
+const ME = { user_id: USER_ID, username: 'Shanto', email: 'shanto@example.com', level: 1, level_name: 'Beginner', language: 'en', age: null, gender: null, created_at: '2026-10-01T00:00:00+00:00' };
 const PROGRESS = {
   levels: LEVEL_NAMES.map((name, i) => ({ level: i + 1, name, status: i === 0 ? 'passed' : i === 1 ? 'skipped' : 'not_yet', current: i === 2 })),
   level_count: 5, levels_passed: 1, levels_skipped: 1, current_level: 3, current_level_name: 'A single strand',
@@ -42,6 +43,10 @@ function gateway(overrides: Partial<Record<string, ReturnType<MockHandler>>> = {
         return { status: 200, data: PROFILE };
       case '/api/ar/progress':
         return { status: 200, data: PROGRESS };
+      case '/api/users/me':
+        return { status: 200, data: ME };
+      case '/api/wildcards':
+        return { status: 200, data: { total: 5, requests: [], can_request: true, next_request_at: null } };
       case '/api/events':
         return { status: 200, data: {} };
       default:
@@ -120,6 +125,92 @@ it('login → Topics → DNA page with the progress dashboard → AR game and ch
   expect(screen.getByTestId('argame-unity-unavailable')).toBeOnTheScreen();
 });
 
+it('Profile: shows the wildcard total; ask the teacher with a reason, then see it waiting', async () => {
+  saveSession(jwtExpiringIn(60, USER_ID));
+  let asked: { amount: number; reason: string } | null = null;
+  const item = () => ({ ticket_id: 't1', ...asked!, status: 'open', granted: null, admin_reply: null, created_at: '2026-10-15T00:00:00+00:00', updated_at: null });
+  const calls = installMockAdapter(ApiClient, (req) => {
+    if (req.url === '/api/wildcards/request') {
+      asked = req.body as { amount: number; reason: string };
+      return { status: 201, data: item() };
+    }
+    if (req.url === '/api/wildcards') {
+      return {
+        status: 200,
+        data: asked
+          ? { total: 5, requests: [item()], can_request: false, next_request_at: '2026-10-18T00:00:00+00:00' }
+          : { total: 5, requests: [], can_request: true, next_request_at: null },
+      };
+    }
+    return gateway()(req);
+  });
+  await render(<App />);
+  await fireEvent.press(await screen.findByTestId('profile-button'));
+
+  expect(await screen.findByTestId('wildcards-total')).toHaveTextContent('5');
+  expect(screen.queryByText(/\bgift\b|default/i)).not.toBeOnTheScreen(); // only the total, never the split
+
+  await fireEvent.press(screen.getByTestId('ask-open'));
+  await fireEvent.press(screen.getByTestId('ask-send'));
+  expect(screen.getByTestId('ask-error')).toHaveTextContent(/at least 5 characters/);
+
+  await fireEvent.press(screen.getByTestId('ask-amount-3'));
+  await fireEvent.changeText(screen.getByTestId('ask-reason'), 'Stuck on the double helix');
+  await fireEvent.press(screen.getByTestId('ask-send'));
+
+  expect(await screen.findByTestId('ask-status')).toHaveTextContent(/You asked for 3 .*Waiting for your teacher/);
+  expect(screen.getByTestId('ask-later')).toHaveTextContent(/You can ask again on/);
+  expect(asked).toEqual({ amount: 3, reason: 'Stuck on the double helix' });
+  expect(calls.some((c) => c.method === 'POST' && c.url === '/api/wildcards/request')).toBe(true);
+});
+
+it('Profile: edit level, age and gender, and change the password', async () => {
+  saveSession(jwtExpiringIn(60, USER_ID));
+  let me = { ...ME };
+  const calls = installMockAdapter(ApiClient, (req) => {
+    if (req.url === '/api/users/me' && req.method === 'PATCH') {
+      const body = req.body as { level?: number; age?: number; gender?: string };
+      me = { ...me, ...body, level_name: 'Intermediate' } as typeof me;
+      return { status: 200, data: me };
+    }
+    if (req.url === '/api/users/me/password') {
+      const body = req.body as { current_password: string };
+      return body.current_password === 'Correct-Horse-9'
+        ? { status: 200, data: { status: 'password_changed' } }
+        : { status: 400, data: errorBody('VALIDATION_ERROR', 'Current password is not correct.', { current_password: 'Current password is not correct.' }) };
+    }
+    return gateway()(req);
+  });
+  await render(<App />);
+  await fireEvent.press(await screen.findByTestId('profile-button'));
+
+  expect(await screen.findByTestId('profile-name')).toHaveTextContent('Shanto');
+  expect(screen.getByTestId('profile-email').props.value).toBe('shanto@example.com');
+
+  await fireEvent.press(screen.getByTestId('profile-level-2'));
+  await fireEvent.changeText(screen.getByTestId('profile-age'), '21');
+  await fireEvent.press(screen.getByTestId('profile-gender-female'));
+  await fireEvent.press(screen.getByTestId('profile-save'));
+  expect(await screen.findByTestId('profile-save-msg')).toHaveTextContent('Profile saved.');
+  const patch = calls.find((c) => c.method === 'PATCH');
+  expect(patch?.body).toEqual({ level: 2, age: 21, gender: 'female' });
+
+  await fireEvent.press(screen.getByTestId('password-open'));
+  await fireEvent.changeText(screen.getByTestId('password-current'), 'Wrong-Pass-1');
+  await fireEvent.changeText(screen.getByTestId('password-new'), 'New-Horse-10');
+  await fireEvent.changeText(screen.getByTestId('password-confirm'), 'New-Horse-1');
+  await fireEvent.press(screen.getByTestId('password-save'));
+  expect(screen.getByText('The passwords do not match.')).toBeOnTheScreen();
+
+  await fireEvent.changeText(screen.getByTestId('password-confirm'), 'New-Horse-10');
+  await fireEvent.press(screen.getByTestId('password-save'));
+  expect(await screen.findByText('Current password is not correct.')).toBeOnTheScreen();
+
+  await fireEvent.changeText(screen.getByTestId('password-current'), 'Correct-Horse-9');
+  await fireEvent.press(screen.getByTestId('password-save'));
+  expect(await screen.findByTestId('password-done')).toHaveTextContent('Password changed.');
+});
+
 it('the DNA page explains when progress cannot be loaded', async () => {
   saveSession(jwtExpiringIn(60, USER_ID));
   installMockAdapter(ApiClient, gateway({ '/api/ar/progress': 'network-error' }));
@@ -128,6 +219,26 @@ it('the DNA page explains when progress cannot be loaded', async () => {
   await fireEvent.press(await screen.findByTestId('topic-dna'));
   expect(await screen.findByTestId('dna-progress-error')).toHaveTextContent(/Couldn't load your progress/);
   expect(screen.getByTestId('dna-chat-button')).toBeOnTheScreen();
+});
+
+it('forgot password: from Login, the request goes to support (no login needed)', async () => {
+  const calls = installMockAdapter(ApiClient, (req) =>
+    req.url === '/api/auth/password-reset-request'
+      ? { status: 200, data: { status: 'received', message: 'Your request was sent to support.' } }
+      : gateway()(req),
+  );
+  await render(<App />);
+  await fireEvent.changeText(await screen.findByTestId('login-username'), 'shanto');
+  await fireEvent.press(screen.getByTestId('go-to-forgot'));
+
+  expect(await screen.findByTestId('forgot-username')).toHaveProp('value', 'shanto');
+  await fireEvent.changeText(screen.getByTestId('forgot-message'), 'Email me please');
+  await fireEvent.press(screen.getByTestId('forgot-send'));
+
+  expect(await screen.findByTestId('forgot-done')).toHaveTextContent(/sent to support/);
+  const req = calls.find((c) => c.url === '/api/auth/password-reset-request');
+  expect(req?.body).toEqual({ username_or_email: 'shanto', message: 'Email me please' });
+  expect(req?.authorization).toBeNull();
 });
 
 it('wrong password keeps the user on Login with an error', async () => {
@@ -171,6 +282,7 @@ it('logout returns to Login and purges stored credentials', async () => {
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
   await render(<App />);
+  await fireEvent.press(await screen.findByTestId('profile-button'));
   await fireEvent.press(await screen.findByTestId('logout-button'));
 
   // The user taps "Log out" in the confirmation dialog

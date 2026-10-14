@@ -2,11 +2,16 @@
 Auth Routes
 POST /api/auth/register  (NEW — needs team agreement)
 POST /api/auth/login     (PDF contract, exact)
+POST /api/auth/password-reset-request   forgot password: becomes a support ticket; an admin resets it
 """
 
 import logging
 
+from typing import Optional
+
 from fastapi import APIRouter, status, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app import errors
@@ -87,3 +92,51 @@ async def logout(current_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Log out a user."""
     await push_log_event("logout", current_user.user_id, current_user.username, current_user.is_admin)
     return {"status": "logged_out"}
+
+
+
+# ============================================================
+# FORGOT PASSWORD → support ticket (kind 'password_reset'); the admin resets it in User Support
+# ============================================================
+
+class PasswordResetRequest(BaseModel):
+    username_or_email: str = Field(..., min_length=3, max_length=254)
+    message: Optional[str] = Field(None, max_length=500)
+
+
+RESET_RECEIVED = ("Your request was sent to support. An admin will reset your password and "
+                  "tell you the new one (for example by email).")
+
+
+@router.post("/password-reset-request")
+async def password_reset_request(body: PasswordResetRequest) -> dict:
+    """
+    Public (the user cannot log in). The answer is the same whether or not the account exists,
+    so nobody can find out which usernames or emails are registered. One open request per user.
+    """
+    from app.routers.wildcards import _setup as ensure_support_columns   # support_tickets.kind (migration 008)
+
+    key = body.username_or_email.strip().lower()
+    async with db.get_session() as session:
+        await ensure_support_columns(session)
+        user = (await session.execute(text(
+            "SELECT user_id, username, email FROM users WHERE lower(username) = :k OR lower(email) = :k LIMIT 1"
+        ), {"k": key})).first()
+        if user is None:
+            note(detail="password reset requested for an unknown user")
+            return {"status": "received", "message": RESET_RECEIVED}
+        uid = str(user.user_id)
+        note(user_id=uid, username=user.username)
+        open_one = (await session.execute(text(
+            "SELECT 1 FROM support_tickets WHERE user_id = :u AND kind = 'password_reset' AND status <> 'resolved' LIMIT 1"
+        ), {"u": uid})).first()
+        if open_one:
+            return {"status": "received", "message": RESET_RECEIVED}
+        message = (body.message or "").strip() or "I forgot my password. Please reset it."
+        row = (await session.execute(text("""
+            INSERT INTO support_tickets (user_id, username, subject, message, priority, status, kind)
+            VALUES (:u, :name, 'Password reset request', :message, 'high', 'open', 'password_reset')
+            RETURNING ticket_id
+        """), {"u": uid, "name": user.username, "message": f"{message}\n\nContact email: {user.email or 'none'}"})).first()
+    await push_log_event("password_reset_requested", uid, user.username, False, {"ticket_id": str(row.ticket_id)})
+    return {"status": "received", "message": RESET_RECEIVED}

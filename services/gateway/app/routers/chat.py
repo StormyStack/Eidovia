@@ -76,7 +76,7 @@ AR_EVENT_TYPES = {
 }
 # app usage: the app was opened (or came back to the front) while logged in → "times used the app"
 APP_EVENT_TYPES = {"app_open"}
-# ar_wildcard_used / ar_wildcard_earned / ar_daily_gift are written by routers/ar.py (the wallet lives on the server)
+# wildcard_* events are written by routers/wildcards.py (the wallet lives on the server)
 
 
 class EventPayload(BaseModel):

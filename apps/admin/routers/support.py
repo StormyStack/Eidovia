@@ -1,7 +1,7 @@
 from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, Query, status
 from dependencies import require_admin, CurrentAdmin
-from schemas import SupportTicketCreate, SupportTicketUpdate, SupportTicketResponse
+from schemas import SupportTicketCreate, SupportTicketUpdate, SupportTicketResponse, WildcardTicketAnswer
 from services.support_service import SupportService
 
 router = APIRouter(prefix="/support", tags=["admin-support"])
@@ -38,3 +38,13 @@ async def update_ticket(
 ) -> dict[str, Any]:
     """Update ticket resolution status or add administrative notes."""
     return await SupportService.update_ticket(ticket_id, body)
+
+
+@router.post("/tickets/{ticket_id}/wildcards")
+async def give_requested_wildcards(
+    ticket_id: str,
+    body: WildcardTicketAnswer,
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict[str, Any]:
+    """Answer a wildcard request: give the cards (to the learner's default) and mark the ticket resolved."""
+    return await SupportService.give_wildcards(ticket_id, body.amount, admin.username, body.note)

@@ -11,11 +11,15 @@ export type RootStackParamList = {
   // signed out
   Login: undefined;
   SignUp: undefined;
+  /** forgot password: ask support to reset it (prefilled with what was typed on Login) */
+  ForgotPassword: { username?: string } | undefined;
   // signed in
   /** first screen after login: the topics (DNA first) */
   Topics: undefined;
   /** the DNA topic: AR game, AI tutor and the learner's progress */
   Dna: undefined;
+  /** name, email, level, age, gender, change password, wildcards (+ request), log out */
+  Profile: undefined;
   /** config = GET /api/modules/{id}/config response (PDF contract); title for the header. */
   ARGame: { config: ModuleConfig; title: string };
   /** AI chat — optional module_id scopes answers to that module's content. */

@@ -52,10 +52,10 @@ async def update_user(
 async def reset_password(
     user_id: str,
     body: AdminPasswordReset,
-    _admin: CurrentAdmin = Depends(require_admin),
-) -> dict[str, str]:
-    """Administrative password reset."""
-    return await UserService.reset_password(user_id, body)
+    admin: CurrentAdmin = Depends(require_admin),
+) -> dict[str, Any]:
+    """Administrative password reset (also resolves the user's open "forgot password" requests)."""
+    return await UserService.reset_password(user_id, body, admin.username)
 
 
 @router.delete("/{user_id}")

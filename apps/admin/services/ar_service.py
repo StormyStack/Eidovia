@@ -13,12 +13,14 @@ details of each action:
                         ar (false = 3D mode: the phone has no ARCore)
   ar_previous_used      session_id, from_level, from_name, to_level, to_name   (Back button, once per 30 s)
 
-Wildcard wallet (table ar_wallets, one per learner; total = gift + default, the learner only sees the total):
-  ar_wildcard_used      written by the gateway: mode (skip = 1 card, jump = 2), cost, paid, from/to level,
+Wildcards are app-wide (gateway routers/wildcards.py, table wildcard_wallets, one per learner; total = gift + default,
+the learner only sees the total). The AR game is feature "ar":
+  wildcard_used         written by the gateway: feature, action/mode (ar: skip = 1 card, jump = 2), cost, paid, from/to level,
                         from_gift, from_default (gift cards are spent first), gift, default, wildcards_left
-  ar_wildcard_earned    gateway: level, level_name, gift, default, total   (+1 default card for passing a level)
-  ar_daily_gift         gateway: added, gift, default, total   (+2 gift cards every 24 h, gift max 6)
-  ar_wildcards_granted  written here: amount, by, gift, default, total   (an admin's cards go to default)
+  wildcard_earned       gateway: feature, reason, level, level_name, gift, default, total   (+1 default card)
+  wildcard_daily_gift   gateway: added, gift, default, total   (+2 gift cards every 24 h, gift max 6)
+  wildcard_requested    gateway: amount, reason, ticket_id   (the learner asked from the app; see User Support)
+  wildcards_granted     written here: amount, by, gift, default, total   (an admin's cards go to default)
 """
 
 import json
@@ -30,12 +32,20 @@ from redis_client import get_redis
 
 LEVEL_NAMES = ["The building blocks", "A nucleotide", "A single strand", "Two strands", "The double helix"]
 AR_ACTIONS = ("('ar_session_start','ar_session_end','ar_part_discovered','ar_stage_completed','ar_journey_completed',"
-              "'ar_wildcard_used','ar_previous_used','ar_wildcard_earned','ar_daily_gift','ar_wildcards_granted')")
+              "'ar_previous_used','wildcard_used','wildcard_earned','wildcard_daily_gift','wildcards_granted',"
+              "'wildcard_requested')")
 MAX_GIFT = 10            # most wildcards an admin can give at once
-START_CARDS = 3          # same as the gateway (services/gateway/app/routers/ar.py)
+START_CARDS = 3          # same as the gateway (services/gateway/app/routers/wildcards.py)
 
-WALLETS_TABLE = """
-CREATE TABLE IF NOT EXISTS ar_wallets (
+WALLETS_SETUP = [
+    # wallets were first called ar_wallets; keep the cards when upgrading
+    """DO $$ BEGIN
+         IF to_regclass('public.ar_wallets') IS NOT NULL AND to_regclass('public.wildcard_wallets') IS NULL THEN
+           ALTER TABLE ar_wallets RENAME TO wildcard_wallets;
+         END IF;
+       END $$""",
+    """
+CREATE TABLE IF NOT EXISTS wildcard_wallets (
     user_id TEXT PRIMARY KEY,
     default_cards INT NOT NULL DEFAULT 3 CHECK (default_cards >= 0),
     gift_cards INT NOT NULL DEFAULT 0 CHECK (gift_cards >= 0),
@@ -44,7 +54,7 @@ CREATE TABLE IF NOT EXISTS ar_wallets (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 )
-"""
+"""]
 _table_ready = False
 
 
@@ -52,7 +62,8 @@ async def _ensure_table(session) -> None:
     """Migration 007 makes the table on a fresh database; older databases get it here."""
     global _table_ready
     if not _table_ready:
-        await session.execute(text(WALLETS_TABLE))
+        for sql in WALLETS_SETUP:
+            await session.execute(text(sql))
         _table_ready = True
 
 
@@ -62,7 +73,7 @@ DURATION = "(CASE WHEN details->>'duration_s' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (det
 SKIPPED = "(details->>'skipped' = 'true')"
 COST = "(CASE WHEN details->>'cost' ~ '^[0-9]+$' AND details->>'paid' = 'true' THEN (details->>'cost')::int END)"
 AMOUNT = "(CASE WHEN details->>'{0}' ~ '^[0-9]+$' THEN (details->>'{0}')::int END)"
-PAID = "(action = 'ar_wildcard_used' AND details->>'paid' = 'true')"
+PAID = "(action = 'wildcard_used' AND details->>'paid' = 'true')"
 TO_LEVEL = "(CASE WHEN details->>'to_level' ~ '^[0-9]+$' THEN (details->>'to_level')::int END)"
 # the level the learner is on after this event (a finished level moves them to the next one)
 NOW_LEVEL = (f"(CASE WHEN action = 'ar_previous_used' OR {PAID} THEN {TO_LEVEL} "
@@ -97,9 +108,9 @@ class ArService:
                     COUNT(*) FILTER (WHERE {PAID} AND details->>'mode' = 'jump')               AS power_jumps,
                     COALESCE(SUM({COST}), 0)                                                   AS cards_spent,
                     COUNT(*) FILTER (WHERE action = 'ar_previous_used')                        AS back_used,
-                    COALESCE(SUM({AMOUNT.format('amount')}) FILTER (WHERE action = 'ar_wildcards_granted'), 0) AS admin_given,
-                    COALESCE(SUM({AMOUNT.format('added')}) FILTER (WHERE action = 'ar_daily_gift'), 0)         AS daily_given,
-                    COUNT(*) FILTER (WHERE action = 'ar_wildcard_earned')                      AS earned,
+                    COALESCE(SUM({AMOUNT.format('amount')}) FILTER (WHERE action = 'wildcards_granted'), 0) AS admin_given,
+                    COALESCE(SUM({AMOUNT.format('added')}) FILTER (WHERE action = 'wildcard_daily_gift'), 0)         AS daily_given,
+                    COUNT(*) FILTER (WHERE action = 'wildcard_earned')                      AS earned,
                     COUNT(DISTINCT user_id) FILTER (WHERE action = 'ar_session_start' AND created_at > now() - interval '24 hours') AS players_24h,
                     MAX(created_at)                                                            AS last_activity
                 FROM audit_logs
@@ -110,7 +121,7 @@ class ArService:
             ))).first()
             await _ensure_table(session)
             wallets = (await session.execute(text(
-                "SELECT COALESCE(SUM(gift_cards), 0) AS gift, COALESCE(SUM(default_cards), 0) AS dflt FROM ar_wallets"
+                "SELECT COALESCE(SUM(gift_cards), 0) AS gift, COALESCE(SUM(default_cards), 0) AS dflt FROM wildcard_wallets"
             ))).first()
         sessions = row.sessions or 0
         return {
@@ -194,9 +205,9 @@ class ArService:
                     COALESCE(SUM({AMOUNT.format('from_gift')}) FILTER (WHERE {PAID}), 0)                 AS spent_gift,
                     COALESCE(SUM({AMOUNT.format('from_default')}) FILTER (WHERE {PAID}), 0)              AS spent_default,
                     COUNT(*) FILTER (WHERE action = 'ar_previous_used')                             AS back_used,
-                    COALESCE(SUM({AMOUNT.format('amount')}) FILTER (WHERE action = 'ar_wildcards_granted'), 0) AS admin_given,
-                    COALESCE(SUM({AMOUNT.format('added')}) FILTER (WHERE action = 'ar_daily_gift'), 0)         AS daily_given,
-                    COUNT(*) FILTER (WHERE action = 'ar_wildcard_earned')                           AS earned,
+                    COALESCE(SUM({AMOUNT.format('amount')}) FILTER (WHERE action = 'wildcards_granted'), 0) AS admin_given,
+                    COALESCE(SUM({AMOUNT.format('added')}) FILTER (WHERE action = 'wildcard_daily_gift'), 0)         AS daily_given,
+                    COUNT(*) FILTER (WHERE action = 'wildcard_earned')                           AS earned,
                     (ARRAY_AGG({NOW_LEVEL} ORDER BY created_at DESC, {NOW_LEVEL} DESC) FILTER (WHERE {NOW_LEVEL} IS NOT NULL))[1] AS current_level,
                     MIN(created_at)                                                                 AS first_played,
                     MAX(created_at)                                                                 AS last_played
@@ -209,7 +220,7 @@ class ArService:
             """), {"search": search.strip()})).all()
             await _ensure_table(session)
             wallets = {w.user_id: w for w in (await session.execute(text(
-                "SELECT user_id, gift_cards, default_cards, last_gift_at, unseen FROM ar_wallets"
+                "SELECT user_id, gift_cards, default_cards, last_gift_at, unseen FROM wildcard_wallets"
             ))).all()}
         players = []
         for r in rows:
@@ -281,16 +292,18 @@ class ArService:
                 return None
             await _ensure_table(session)
             w = (await session.execute(text("""
-                INSERT INTO ar_wallets (user_id, default_cards, unseen) VALUES (:uid, :start + :amount, :amount)
+                INSERT INTO wildcard_wallets (user_id, default_cards, unseen)
+                VALUES (CAST(:uid AS TEXT), CAST(:first AS INT), CAST(:amount AS INT))
                 ON CONFLICT (user_id) DO UPDATE
-                    SET default_cards = ar_wallets.default_cards + :amount, unseen = ar_wallets.unseen + :amount, updated_at = now()
+                    SET default_cards = wildcard_wallets.default_cards + CAST(:amount AS INT),
+                        unseen = wildcard_wallets.unseen + CAST(:amount AS INT), updated_at = now()
                 RETURNING gift_cards, default_cards
-            """), {"uid": user_id, "amount": amount, "start": START_CARDS})).first()
+            """), {"uid": str(user_id), "amount": amount, "first": START_CARDS + amount})).first()
         wallet = {"gift": w.gift_cards, "default": w.default_cards, "total": w.gift_cards + w.default_cards}
         try:
             r = await get_redis()
             await r.rpush("raw_audit_logs", json.dumps({
-                "action": "ar_wildcards_granted",
+                "action": "wildcards_granted",
                 "user_id": user_id,
                 "username": user.username,
                 "details": {"amount": amount, "by": admin_username, **wallet},
