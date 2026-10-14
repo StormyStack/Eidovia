@@ -116,6 +116,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - OLLAMA_URL=http://ollama:11434
+      # Technical dashboard: the ngrok agent API (tunnel container) and the public domain to test
+      - NGROK_API_URL=http://tunnel:4040
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
     volumes:
       - ./apps/admin:/app
     depends_on:

@@ -1127,9 +1127,15 @@
                     document.getElementById('diag-redis-info').textContent = `Latency: ${h.redis.latency_ms || '--'} ms | Keys: ${h.redis.total_keys || 0} | Memory: ${h.redis.used_memory_human || 'N/A'}`;
 
                     // AI
-                    document.getElementById('diag-ai-status').textContent = h.ai_service.connected ? 'Active' : 'Unreachable';
-                    document.getElementById('diag-ai-status').className = 'badge ' + (h.ai_service.connected ? 'badge-resolved' : 'badge-open');
-                    document.getElementById('diag-ai-info').textContent = `Model: ${h.ai_service.active_model || 'phi4-mini'} | Latency: ${h.ai_service.latency_ms || '--'} ms`;
+                    const ai = h.ai_service;
+                    const aiState = !ai.connected ? ['Ollama down', 'badge-open']
+                        : !ai.model_installed ? ['Model missing', 'badge-open']
+                        : ai.model_loaded ? ['Model running', 'badge-resolved'] : ['Model idle', 'badge-in_progress'];
+                    document.getElementById('diag-ai-status').textContent = aiState[0];
+                    document.getElementById('diag-ai-status').className = 'badge ' + aiState[1];
+                    document.getElementById('diag-ai-info').textContent = !ai.connected ? `Ollama unreachable (${ai.error || 'no answer'})`
+                        : !ai.model_installed ? `${ai.active_model} is not pulled in Ollama`
+                        : `${ai.active_model} ${ai.model_loaded ? 'loaded in memory' : 'installed, loads on the next question'} | Ollama v${ai.version} | ${ai.latency_ms || '--'} ms`;
                 }
             } catch(e) { console.error(e); }
         }
@@ -1628,7 +1634,7 @@
                 document.getElementById('tech-checked').textContent = 'checked ' + new Date(st.checked_at).toLocaleTimeString();
                 document.getElementById('tech-services').innerHTML = st.services.map(x => `
                     <div class="svc ${x.state}">
-                        <div class="svc-head"><span>${esc(x.name)}</span><span class="badge ${SVC_BADGE[x.state]}">${SVC_LABEL[x.state]}</span></div>
+                        <div class="svc-head"><span>${esc(x.name)}</span><span class="badge ${SVC_BADGE[x.state]}">${esc(x.label || SVC_LABEL[x.state])}</span></div>
                         <div class="svc-detail">${esc(x.detail)}${x.latency_ms !== null && x.latency_ms !== undefined ? ' · ' + x.latency_ms + ' ms' : ''}</div>
                     </div>`).join('');
                 const tbody = document.getElementById('tech-online-body');

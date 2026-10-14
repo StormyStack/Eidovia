@@ -45,9 +45,10 @@ def _parse(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _service(key: str, name: str, ok: bool, detail: str, latency: Optional[float] = None, warn: bool = False) -> dict:
+def _service(key: str, name: str, ok: bool, detail: str, latency: Optional[float] = None, warn: bool = False,
+             label: Optional[str] = None) -> dict:
     return {"key": key, "name": name, "state": "down" if not ok else "warn" if warn else "up",
-            "ok": ok, "latency_ms": latency, "detail": detail}
+            "ok": ok, "latency_ms": latency, "detail": detail, "label": label}
 
 
 async def _check_gateway() -> dict:
@@ -106,32 +107,89 @@ async def _check_logger(r) -> dict:
         return _service("logger", name, False, f"error: {type(e).__name__}")
 
 
-async def _check_ollama() -> dict:
-    name = f"Ollama LLM ({OLLAMA_MODEL})"
+async def ollama_status() -> dict[str, Any]:
+    """
+    Ollama server and the phi4-mini model separately:
+      /api/version  server up?
+      /api/tags     model downloaded?
+      /api/ps       model loaded in memory right now (answers immediately)?
+    """
+    out: dict[str, Any] = {"server": False, "version": None, "latency_ms": None, "installed": False,
+                           "loaded": False, "size_vram_mb": None, "expires_at": None, "error": None, "model": OLLAMA_MODEL}
+    want = OLLAMA_MODEL.split(":")[0]
     t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
-            res = await client.get(f"{OLLAMA_URL}/api/tags")
-        models = [m.get("name", "") for m in res.json().get("models", [])] if res.status_code == 200 else []
-        has_model = any(m.split(":")[0] == OLLAMA_MODEL.split(":")[0] for m in models)
-        return _service("ollama", name, res.status_code == 200,
-                        (f"model {OLLAMA_MODEL} ready" if has_model else f"model {OLLAMA_MODEL} NOT pulled") +
-                        f" · {len(models)} models", _ms(t0), warn=not has_model)
+            ver = await client.get(f"{OLLAMA_URL}/api/version")
+            out["latency_ms"] = _ms(t0)
+            out["server"] = ver.status_code == 200
+            if not out["server"]:
+                out["error"] = f"HTTP {ver.status_code}"
+                return out
+            out["version"] = ver.json().get("version")
+            tags = await client.get(f"{OLLAMA_URL}/api/tags")
+            names = [m.get("name", "") for m in tags.json().get("models", [])] if tags.status_code == 200 else []
+            out["installed"] = any(n.split(":")[0] == want for n in names)
+            ps = await client.get(f"{OLLAMA_URL}/api/ps")
+            for m in (ps.json().get("models", []) if ps.status_code == 200 else []):
+                if (m.get("name") or m.get("model") or "").split(":")[0] == want:
+                    out["loaded"] = True
+                    out["size_vram_mb"] = round((m.get("size_vram") or 0) / 1048576)
+                    out["expires_at"] = m.get("expires_at")
     except Exception as e:
-        return _service("ollama", name, False, f"unreachable: {type(e).__name__}")
+        out["error"] = type(e).__name__
+    return out
+
+
+async def _check_ollama() -> List[dict]:
+    o = await ollama_status()
+    server = _service("ollama", "Ollama server (:11434)", o["server"],
+                      f"v{o['version']}" if o["server"] else f"unreachable: {o['error']}", o["latency_ms"])
+    name = f"AI model {OLLAMA_MODEL}"
+    if not o["server"]:
+        model = _service("llm", name, False, "not running: Ollama is down", label="Not running")
+    elif not o["installed"]:
+        model = _service("llm", name, False, f"not installed: run  docker exec eidovia_ollama ollama pull {OLLAMA_MODEL}",
+                         label="Not installed")
+    elif o["loaded"]:
+        model = _service("llm", name, True, f"loaded · {o['size_vram_mb']} MB on GPU" if o["size_vram_mb"] else "loaded (CPU)",
+                         label="Running")
+    else:
+        model = _service("llm", name, True, "installed but not loaded in memory: the next question loads it (slower first answer)",
+                         warn=True, label="Not loaded")
+    return [server, model]
+
+
+NGROK_API = os.getenv("NGROK_API_URL", "http://tunnel:4040").rstrip("/")
 
 
 async def _check_tunnel() -> dict:
+    """The ngrok agent (container 'tunnel', API on :4040) and the public URL end to end."""
     name = "Public tunnel (ngrok)"
-    if not NGROK_DOMAIN:
-        return _service("tunnel", name, False, "NGROK_DOMAIN not set")
+    public = f"https://{NGROK_DOMAIN}" if NGROK_DOMAIN else None
+    agent_ok = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            res = await client.get(f"{NGROK_API}/api/tunnels")
+        tunnels = res.json().get("tunnels", []) if res.status_code == 200 else []
+        agent_ok = res.status_code == 200
+        https = [t.get("public_url") for t in tunnels if (t.get("public_url") or "").startswith("https://")]
+        if https:
+            public = https[0]
+    except Exception:
+        pass
+    if not public:
+        return _service("tunnel", name, False, "ngrok agent not reachable and NGROK_DOMAIN not set")
     t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
-            res = await client.get(f"https://{NGROK_DOMAIN}/health", headers={"ngrok-skip-browser-warning": "1"})
-        return _service("tunnel", name, res.status_code == 200, f"https://{NGROK_DOMAIN} · HTTP {res.status_code}", _ms(t0))
+            res = await client.get(f"{public}/health", headers={"ngrok-skip-browser-warning": "1"})
+        ok = res.status_code == 200
+        return _service("tunnel", name, ok, f"{public} → gateway · HTTP {res.status_code}" + ("" if agent_ok else " · agent API not reachable"),
+                        _ms(t0), warn=ok and not agent_ok)
     except Exception as e:
-        return _service("tunnel", name, False, f"https://{NGROK_DOMAIN} unreachable: {type(e).__name__}")
+        return _service("tunnel", name, False, f"{public} unreachable from the server: {type(e).__name__}"
+                        + (" (agent is online)" if agent_ok else ""), warn=False)
 
 
 async def _read_requests(r, limit: int = 5000) -> List[dict]:
@@ -153,7 +211,7 @@ class TechService:
         gateway, postgres, ollama, tunnel, logger_state = await asyncio.gather(
             _check_gateway(), _check_postgres(), _check_ollama(), _check_tunnel(), _check_logger(r)
         )
-        services = [gateway, postgres, redis_state, logger_state, ollama, tunnel,
+        services = [gateway, postgres, redis_state, logger_state, *ollama, tunnel,
                     _service("admin", "Admin panel (FastAPI :8090)", True, "this page")]
 
         # traffic in the last hour, from the request log

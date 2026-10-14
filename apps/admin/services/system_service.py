@@ -62,25 +62,21 @@ class SystemService:
             health["status"] = "degraded"
             health["redis"] = {"connected": False, "error": str(e)}
 
-        # 3. Ollama AI check
-        try:
-            t0 = time.perf_counter()
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(f"{OLLAMA_URL}/api/version")
-                latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-                if res.status_code == 200:
-                    health["ai_service"] = {
-                        "connected": True,
-                        "latency_ms": latency_ms,
-                        "engine": "Ollama",
-                        "active_model": OLLAMA_MODEL,
-                        "version": res.json().get("version", "unknown"),
-                    }
-                else:
-                    health["ai_service"] = {"connected": False, "status_code": res.status_code}
-        except Exception as e:
+        # 3. Ollama server and the phi4-mini model (downloaded? loaded?)
+        from services.tech_service import ollama_status
+        o = await ollama_status()
+        health["ai_service"] = {
+            "connected": o["server"],
+            "latency_ms": o["latency_ms"],
+            "engine": "Ollama",
+            "version": o["version"],
+            "active_model": OLLAMA_MODEL,
+            "model_installed": o["installed"],
+            "model_loaded": o["loaded"],
+            "error": o["error"],
+        }
+        if not (o["server"] and o["installed"]):
             health["status"] = "degraded"
-            health["ai_service"] = {"connected": False, "error": str(e)}
 
         return health
 
