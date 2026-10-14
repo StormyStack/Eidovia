@@ -102,7 +102,7 @@ it('clears the input after sending', async () => {
   );
 });
 
-it('shows a ⚡ cached badge when the response is cached', async () => {
+it('shows a cached answer like any other answer (cache info is for admins only)', async () => {
   installMockAdapter(ApiClient, (req) => {
     if (req.url === '/api/chat') return { status: 200, data: CACHED_RESPONSE };
     return { status: 200, data: {} };
@@ -112,7 +112,8 @@ it('shows a ⚡ cached badge when the response is cached', async () => {
   fireEvent.changeText(screen.getByTestId('chat-input'), 'What is mitosis?');
   fireEvent.press(screen.getByTestId('chat-send'));
 
-  expect(await screen.findByText('⚡ cached')).toBeOnTheScreen();
+  expect(await screen.findByText('Cached answer.')).toBeOnTheScreen();
+  expect(screen.queryByText('⚡ cached')).toBeNull();
 });
 
 it('shows an error bubble when the AI service is unavailable', async () => {

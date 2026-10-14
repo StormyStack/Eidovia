@@ -2,9 +2,9 @@
  * Root navigation (PDF §1: "App.tsx — Root navigation (React Navigation stack)").
  *
  * 1. While authStore.restoreSession() runs → SplashScreen.
- * 2. Signed out → Login, SignUp.   Signed in → Home, ARGame.
+ * 2. Signed out → Login, SignUp.   Signed in → Topics → Dna (AR game, AI tutor, progress) → ARGame / Chat.
  * Signing in/out swaps the screen set; React Navigation moves to the right screen
- * automatically (never navigate to Home manually after login).
+ * automatically (never navigate to Topics manually after login).
  */
 
 import { DefaultTheme, NavigationContainer, type Theme as NavigationTheme } from '@react-navigation/native';
@@ -16,10 +16,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { RootStackParamList } from './navigation/types';
 import { ARGameScreen } from './screens/ARGameScreen';
 import { ChatScreen } from './screens/ChatScreen';
-import { HomeScreen } from './screens/HomeScreen';
+import { DnaScreen } from './screens/DnaScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { SignUpScreen } from './screens/SignUpScreen';
 import { SplashScreen } from './screens/SplashScreen';
+import { useAppUsageLog } from './services/AppUsage';
+import { TopicsScreen } from './screens/TopicsScreen';
 import { useAuthStore } from './store/authStore';
 import { brand, palette } from './theme';
 
@@ -46,6 +48,8 @@ export default function App() {
     void restoreSession();
   }, [restoreSession]);
 
+  useAppUsageLog(isAuthenticated); // admin panel: times the app was used
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -66,7 +70,8 @@ export default function App() {
           >
             {isAuthenticated ? (
               <Stack.Group>
-                <Stack.Screen name="Home" component={HomeScreen} options={{ title: brand.name }} />
+                <Stack.Screen name="Topics" component={TopicsScreen} options={{ title: brand.name }} />
+                <Stack.Screen name="Dna" component={DnaScreen} options={{ title: 'DNA' }} />
                 <Stack.Screen name="ARGame" component={ARGameScreen} options={({ route }) => ({ title: route.params.title })} />
                 <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'AI Tutor' }} />
               </Stack.Group>

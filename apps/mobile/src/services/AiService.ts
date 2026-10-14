@@ -21,8 +21,6 @@ export interface ChatMessage {
   text: string;
   /** ISO timestamp string. */
   timestamp: string;
-  /** True if this answer came from the Redis cache. */
-  cached?: boolean;
 }
 
 export interface ChatRequest {

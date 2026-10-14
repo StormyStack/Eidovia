@@ -1,22 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { isUnityAvailable, UnityBridge, UnityView, type UnityMessage } from '../../modules/eidovia-unity';
 import { Banner } from '../components/Banner';
 import { ScreenContainer } from '../components/ScreenContainer';
 import type { ScreenProps } from '../navigation/types';
+import { ArService } from '../services/ArService';
+import { startArSession, type ArSession } from '../services/ArTelemetry';
 import type { ModuleConfig } from '../services/types';
 import { difficultyLabel, palette, radius, shadow, spacing, typography } from '../theme';
 
 /**
  * Sprint 2: the DNA AR Unity game, full-screen (PDF Flowchart A, step 4).
  * Once Unity signals "ready" the screen sends it the module config; the game reports its progress
- * back through onMessage. The game itself makes no network calls.
+ * back through onMessage. The game itself makes no network calls; the screen reports the session to the
+ * gateway (services/ArTelemetry) for the admin panel.
+ * Wildcards come from the server wallet (services/ArService): synced when the game is ready and every 30 s
+ * (so an admin's gift or the daily gift shows up), and every use / earned card is paid on the server.
  * Unity runs only in an Android build that contains it (modules/eidovia-unity); in Expo Go and tests
  * the screen explains how to get that build instead.
  */
-/** The built-in DNA AR experience (the Unity game), opened by the "Explore DNA in AR" button on Home. */
+/** The built-in DNA AR experience (the Unity game), opened by the "Explore DNA in AR" button on the DNA page. */
 export const DNA_AR: { title: string; config: ModuleConfig } = {
   title: 'DNA in AR',
   config: { module_id: 'dna_ar', scene_name: 'Root_ARPersistent', cdn_bundle_url: '', difficulty: 1, config: {} },
@@ -29,6 +34,8 @@ export function ARGameScreen({ route }: ScreenProps<'ARGame'>) {
 }
 
 type Camera = 'asking' | 'granted' | 'denied';
+
+const WALLET_SYNC_MS = 30_000;
 
 /** AR needs the camera; ask before Unity starts (the host activity, not Unity, owns permission results). */
 function CameraGate({ config }: { config: ScreenProps<'ARGame'>['route']['params']['config'] }) {
@@ -63,6 +70,18 @@ function CameraGate({ config }: { config: ScreenProps<'ARGame'>['route']['params
 function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params']['config'] }) {
   const [ready, setReady] = useState(UnityBridge.isRunning());
   const [progress, setProgress] = useState<Extract<UnityMessage, { type: 'progress' }> | null>(null);
+  const [noArNote, setNoArNote] = useState(false);
+  const session = useRef<ArSession | null>(null);
+
+  // one AR session per visit of this screen (admin panel: AR Game)
+  useEffect(() => {
+    const current = startArSession(config.module_id);
+    session.current = current;
+    return () => {
+      current.end();
+      if (session.current === current) session.current = null;
+    };
+  }, [config.module_id]);
 
   const sendInit = useCallback(() => {
     UnityBridge.send({
@@ -77,8 +96,25 @@ function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params'
     sendInit();
   }, [sendInit]);
 
+  // wildcards: the server wallet is the truth; the game only shows the total
+  const sendWallet = useCallback((total: number, added = 0) => {
+    UnityBridge.send({ type: 'wallet', total, added });
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const sync = () => {
+      ArService.syncWallet()
+        .then((w) => sendWallet(w.total, w.added))
+        .catch(() => undefined); // offline: the game keeps its last count, the next sync fixes it
+    };
+    sync();
+    const timer = setInterval(sync, WALLET_SYNC_MS);
+    return () => clearInterval(timer);
+  }, [ready, sendWallet]);
+
   const onMessage = useCallback(
     (message: UnityMessage) => {
+      session.current?.onMessage(message);
       switch (message.type) {
         case 'ready':
           setReady(true);
@@ -87,11 +123,24 @@ function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params'
         case 'progress':
           setProgress(message);
           break;
+        case 'mode':
+          setNoArNote(!message.ar);
+          break;
+        case 'wildcard_used':
+          ArService.spendWildcard(message.mode, message.from + 1, message.to + 1, session.current?.sessionId ?? '')
+            .then((total) => sendWallet(total))
+            .catch(() => undefined);
+          break;
+        case 'wildcard_earned':
+          ArService.earnWildcard(message.stage + 1, session.current?.sessionId ?? '')
+            .then((total) => sendWallet(total))
+            .catch(() => undefined);
+          break;
         default:
           break;
       }
     },
-    [sendInit]
+    [sendInit, sendWallet]
   );
 
   return (
@@ -102,6 +151,11 @@ function UnityGame({ config }: { config: ScreenProps<'ARGame'>['route']['params'
           <ActivityIndicator size="large" color={palette.surface} />
           <Text style={styles.loadingText}>Starting AR…</Text>
         </View>
+      )}
+      {ready && noArNote && (
+        <Pressable style={styles.noAr} onPress={() => setNoArNote(false)} accessibilityRole="button" testID="argame-no-ar">
+          <Text style={styles.noArText}>3D mode · this phone doesn't support AR, so the DNA is shown on screen. Tap to hide.</Text>
+        </Pressable>
       )}
       {ready && progress && (
         <View style={styles.progress} pointerEvents="none" accessibilityLabel="Game progress">
@@ -188,6 +242,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   progressText: { ...typography.caption, color: palette.surface },
+  noAr: {
+    position: 'absolute',
+    top: spacing.lg,
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  noArText: { ...typography.caption, color: palette.surface, textAlign: 'center' },
   hero: {
     alignItems: 'center',
     backgroundColor: palette.surface,

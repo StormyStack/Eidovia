@@ -12,7 +12,10 @@ export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   // signed in
-  Home: undefined;
+  /** first screen after login: the topics (DNA first) */
+  Topics: undefined;
+  /** the DNA topic: AR game, AI tutor and the learner's progress */
+  Dna: undefined;
   /** config = GET /api/modules/{id}/config response (PDF contract); title for the header. */
   ARGame: { config: ModuleConfig; title: string };
   /** AI chat — optional module_id scopes answers to that module's content. */

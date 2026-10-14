@@ -55,6 +55,8 @@ async def process_logs():
 
     while True:
         try:
+            # heartbeat for the admin "Technical" tab (the loop runs at least every 5 s)
+            await r.set("logger:heartbeat", datetime.utcnow().isoformat() + "Z", ex=60)
             # BLPOP blocks until a message is available
             result = await r.blpop("raw_audit_logs", timeout=5)
             if not result:
@@ -76,8 +78,8 @@ async def process_logs():
                 continue
 
             # Filtering logic: Only save known events.
-            # E.g. user login logout, how many message send
-            if action not in ["login", "logout", "register", "message_sent"]:
+            # E.g. user login logout, how many message send, app opened, AR game progress (ar_*)
+            if action not in ["login", "logout", "register", "message_sent", "app_open"] and not action.startswith("ar_"):
                 logger.info(f"Skipping unknown action: {action}")
                 continue
 

@@ -50,6 +50,7 @@ App → Unity (`UnityBridge.send`, delivered to `XR Origin.OnHostMessage`, queue
 |---|---|
 | `init` | `moduleId`, `sceneName` |
 | `restart` | – |
+| `wallet` | `total`, `added` (wildcards from the server wallet; `added` > 0 plays the gift animation) |
 
 Unity → App (`onMessage`):
 
@@ -60,6 +61,10 @@ Unity → App (`onMessage`):
 | `part_discovered` | `part`, `stage` |
 | `stage_completed` | `stage`, `skipped` |
 | `journey_completed` | – |
+| `mode` | `ar` (false = 3D mode, no ARCore) |
+| `wildcard_used` | `mode` (`skip` 1 card / `jump` 2 cards), `from`, `to`, `cost`, `left` |
+| `previous_used` | `from`, `to` (free Back button, once per 30 s) |
+| `wildcard_earned` | `stage` |
 
 The game makes no network calls. Anything that should reach the backend (progress, AI) goes
 through these messages and is handled by the app.

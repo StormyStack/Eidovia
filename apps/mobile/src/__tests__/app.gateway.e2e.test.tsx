@@ -59,7 +59,7 @@ describeIfGateway('E2E checklist against the real gateway', () => {
     await fireEvent.press(rntl.screen.getByTestId('login-submit'));
   }
 
-  it('1. sign up → auto-login → Home shows modules', async () => {
+  it('1. sign up → auto-login → Topics shows DNA', async () => {
     await launchApp();
     await fireEvent.press(await rntl.screen.findByTestId('go-to-signup'));
     await fireEvent.changeText(await rntl.screen.findByTestId('signup-username'), username);
@@ -69,8 +69,7 @@ describeIfGateway('E2E checklist against the real gateway', () => {
     await fireEvent.press(rntl.screen.getByTestId('signup-submit'));
 
     expect(await rntl.screen.findByTestId('home-greeting')).toHaveTextContent(`Hi, ${username}!`);
-    expect(await rntl.screen.findByText('Explore the Cell')).toBeOnTheScreen();
-    expect(rntl.screen.getByText('Cell Quiz')).toBeOnTheScreen();
+    expect(rntl.screen.getByTestId('topic-dna')).toBeOnTheScreen();
   });
 
   it('2. kill and reopen the app → still logged in', async () => {
@@ -78,10 +77,12 @@ describeIfGateway('E2E checklist against the real gateway', () => {
     expect(await rntl.screen.findByTestId('home-greeting')).toHaveTextContent(`Hi, ${username}!`);
   });
 
-  it('3. open a module → ARGame shows its scene_name', async () => {
+  it('3. DNA → progress from the gateway → ARGame shows the Unity scene', async () => {
     await launchApp();
-    await fireEvent.press(await rntl.screen.findByTestId('module-cell-quiz'));
-    expect(await rntl.screen.findByTestId('argame-scene-name')).toHaveTextContent('GameScene_CellQuiz');
+    await fireEvent.press(await rntl.screen.findByTestId('topic-dna'));
+    expect(await rntl.screen.findByTestId('dna-progress')).toBeOnTheScreen();
+    await fireEvent.press(rntl.screen.getByTestId('dna-ar-button'));
+    expect(await rntl.screen.findByTestId('argame-scene-name')).toHaveTextContent('Root_ARPersistent');
   });
 
   it('4. logout → Login, credentials purged', async () => {
@@ -106,7 +107,7 @@ describeIfGateway('E2E checklist against the real gateway', () => {
     expect(rntl.screen.queryByTestId('home-greeting')).not.toBeOnTheScreen();
   });
 
-  it('6. correct password → Home', async () => {
+  it('6. correct password → Topics', async () => {
     await launchApp();
     await login(password);
     expect(await rntl.screen.findByTestId('home-greeting')).toBeOnTheScreen();

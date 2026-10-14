@@ -20,6 +20,7 @@ services:
       - ./services/ai/migrations/004_audit_logs.sql:/docker-entrypoint-initdb.d/004_audit_logs.sql:ro
       - ./services/ai/migrations/005_admin_user.sql:/docker-entrypoint-initdb.d/005_admin_user.sql:ro
       - ./services/ai/migrations/006_admin_support_maintenance.sql:/docker-entrypoint-initdb.d/006_admin_support_maintenance.sql:ro
+      - ./services/ai/migrations/007_ar_wallets.sql:/docker-entrypoint-initdb.d/007_ar_wallets.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-eidovia}"]
       interval: 5s
@@ -147,6 +148,23 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - eidovia_network
+
+  # Public HTTPS address for the mobile app: ngrok with a fixed free domain.
+  # Set NGROK_AUTHTOKEN and NGROK_DOMAIN in .env (dashboard.ngrok.com). The app uses https://<NGROK_DOMAIN>
+  tunnel:
+    image: ngrok/ngrok:latest
+    container_name: eidovia_tunnel
+    restart: unless-stopped
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    # goes through the PC's published gateway port 8080 (GATEWAY_PORT)
+    command: http --url=${NGROK_DOMAIN} host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - gateway
     networks:
       - eidovia_network
 

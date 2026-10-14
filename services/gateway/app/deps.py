@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app import repositories as repo
 from app.db import db
 from app.errors import token_invalid, token_missing
+from app.request_log import note
 from app.security import decode_access_token
 
 # Declared so /docs shows the "Authorize" button; parsing is done below so that
@@ -53,8 +54,10 @@ async def get_current_user(
         if not profile:
             raise token_invalid()
 
-    return CurrentUser(
+    user = CurrentUser(
         user_id=user_id,
         username=profile.get("username", "unknown"),
         is_admin=bool(profile.get("is_admin")),
     )
+    note(user_id=user.user_id, username=user.username)   # technical request log
+    return user

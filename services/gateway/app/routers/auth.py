@@ -15,6 +15,7 @@ from app.db import db
 from app.schemas import AuthResponse, LoginRequest, ProfileSummary, RegisterRequest
 from app.security import burn_password_check, create_access_token, hash_password, verify_password
 from app.logger_client import push_log_event
+from app.request_log import note
 from app.deps import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ async def register(body: RegisterRequest) -> AuthResponse:
         raise
 
     logger.info(f"User registered: {user['user_id']}")
-    await push_log_event("register", str(user["user_id"]), body.username, False)
+    await push_log_event("register", str(user["user_id"]), body.username, False, {"email": body.email})
     return _auth_response(user["user_id"], user["detail_level"], user["language"])
 
 
@@ -68,9 +69,11 @@ async def login(body: LoginRequest) -> AuthResponse:
 
     if user is None:
         await burn_password_check(body.password)
+        note(detail=f"login failed: unknown user {body.username[:40]}")
         raise errors.invalid_credentials()
 
     if not await verify_password(body.password, user.password_hash):
+        note(user_id=str(user.user_id), username=user.username, detail="login failed: wrong password")
         raise errors.invalid_credentials()
 
     user_id = str(user.user_id)

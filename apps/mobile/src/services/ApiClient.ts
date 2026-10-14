@@ -149,6 +149,11 @@ export const ApiClient = axios.create({
   transitional: { clarifyTimeoutError: true },
 });
 
+/** X-Client header ("Eidovia/1.0 android 34 (Xiaomi …)"): the admin panel shows it as the user's device. */
+export function setClientDescription(description: string): void {
+  ApiClient.defaults.headers.common['X-Client'] = description;
+}
+
 ApiClient.interceptors.request.use((config) => {
   if (CONFIG_ERROR) {
     throw new ApiError('CONFIG_ERROR', CONFIG_ERROR);

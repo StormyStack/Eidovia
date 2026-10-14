@@ -5,6 +5,8 @@ from routers.users import router as users_router
 from routers.support import router as support_router
 from routers.system import router as system_router
 from routers.audit import router as audit_router
+from routers.ar_game import router as ar_game_router
+from routers.tech import router as tech_router
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -14,5 +16,7 @@ admin_router.include_router(users_router)
 admin_router.include_router(support_router)
 admin_router.include_router(system_router)
 admin_router.include_router(audit_router)
+admin_router.include_router(ar_game_router)
+admin_router.include_router(tech_router)
 
 __all__ = ["admin_router"]

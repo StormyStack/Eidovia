@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from app.deps import CurrentUser, get_current_user
 from app.cache import redis_cache
 from app.logger_client import push_log_event
+from app.request_log import note
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,20 @@ class ChatResponse(BaseModel):
     cached: bool = False
 
 
+# AR game events stored in audit_logs (sent by the mobile app's ArTelemetry)
+AR_EVENT_TYPES = {
+    "ar_session_start",
+    "ar_session_end",
+    "ar_part_discovered",
+    "ar_stage_completed",
+    "ar_journey_completed",
+    "ar_previous_used",
+}
+# app usage: the app was opened (or came back to the front) while logged in → "times used the app"
+APP_EVENT_TYPES = {"app_open"}
+# ar_wildcard_used / ar_wildcard_earned / ar_daily_gift are written by routers/ar.py (the wallet lives on the server)
+
+
 class EventPayload(BaseModel):
     """POST /api/events — learner interaction event."""
     session_id: str
@@ -89,6 +104,7 @@ async def chat(
     # 0. Check Redis for Hot Message (Instant ~2ms response)
     hot = await redis_cache.get_hot_message(body.question)
     if hot:
+        note(upstream="gateway → Redis cache (hit)")
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         await push_log_event(
             "message_sent",
@@ -128,6 +144,7 @@ async def chat(
                 answer = data.get("message", {}).get("content", "").strip()
                 latency_ms = round((time.perf_counter() - t0) * 1000, 2)
                 is_on_topic = "specifically designed to tutor on DNA" not in answer
+                note(upstream=f"gateway → Ollama {OLLAMA_MODEL} → Redis cache (saved)", detail=f"model {latency_ms} ms")
                 
                 # Save as Hot Message in Redis
                 await redis_cache.set_hot_message(body.question, {"answer": answer, "is_on_topic": is_on_topic})
@@ -148,8 +165,10 @@ async def chat(
                     latency_ms=latency_ms,
                     cached=False,
                 )
+            note(detail=f"Ollama answered {resp.status_code}")
     except Exception as exc:
         logger.info("Direct Ollama call on %s failed: %s", OLLAMA_URL, exc)
+        note(detail=f"Ollama failed: {type(exc).__name__}")
 
     # 2. Secondary fallback: query port 8001 if active
     try:
@@ -164,6 +183,7 @@ async def chat(
                 },
             )
             if resp.status_code == 200:
+                note(upstream="gateway → AI service :8001")
                 resp_data = resp.json()
                 await push_log_event(
                     "message_sent",
@@ -177,6 +197,7 @@ async def chat(
         pass
 
     # 3. Graceful fallback message if Ollama is still pulling or starting up
+    note(upstream="gateway → fallback message (AI offline)")
     latency_ms = round((time.perf_counter() - t0) * 1000, 2)
     await push_log_event(
         "message_sent",
@@ -205,8 +226,23 @@ async def log_event(
 ) -> dict:
     """
     Log learner interaction telemetry.
+    AR game events (ar_*) go to the audit log like login/chat, for the admin "AR Game" tab.
     """
     logger.debug("Logged event: %s for user %s", body.event_type, current_user.user_id)
+    if body.event_type in AR_EVENT_TYPES or body.event_type in APP_EVENT_TYPES:
+        details = {k: v for k, v in (body.payload or {}).items() if isinstance(k, str)}
+        details["session_id"] = body.session_id[:100]
+        if body.client_timestamp:
+            details["client_timestamp"] = body.client_timestamp[:40]
+        await push_log_event(
+            body.event_type,
+            current_user.user_id,
+            current_user.username,
+            current_user.is_admin,
+            details,
+        )
+    else:
+        note(upstream="gateway (event not stored)")
     return {"status": "ok"}
 
 

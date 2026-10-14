@@ -19,12 +19,21 @@ export type UnityMessage =
   | { type: 'progress'; stage: number; stageCount: number; found: number; required: number; wildcards: number }
   | { type: 'part_discovered'; part: string; stage: number }
   | { type: 'stage_completed'; stage: number; skipped: boolean }
-  | { type: 'journey_completed' };
+  | { type: 'journey_completed' }
+  | { type: 'mode'; ar: boolean }
+  /** a wildcard was used: skip = next level (1 card), jump = any level (2 cards); stages are 0-based */
+  | { type: 'wildcard_used'; mode: 'skip' | 'jump'; from: number; to: number; cost: number; left: number }
+  /** the free Back button (once per 30 s) */
+  | { type: 'previous_used'; from: number; to: number }
+  /** a level finished on one's own earned a card */
+  | { type: 'wildcard_earned'; stage: number };
 
 /** app -> Unity */
 export type HostMessage =
   | { type: 'init'; moduleId?: string; sceneName?: string }
-  | { type: 'restart' };
+  | { type: 'restart' }
+  /** wildcards from the server wallet; added > 0 plays the gift animation */
+  | { type: 'wallet'; total: number; added: number };
 
 /** GameObject in the Unity scene that receives messages (MobileBridge lives on it). */
 export const UNITY_GAME_OBJECT = 'XR Origin';

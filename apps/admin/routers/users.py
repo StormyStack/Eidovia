@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, Query, status
 from dependencies import require_admin, CurrentAdmin
 from schemas import AdminUserCreate, AdminUserUpdate, AdminPasswordReset, UserProfileResponse
 from services.user_service import UserService
+from services.user_log_service import UserLogService
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/users", tags=["admin-users"])
 
@@ -63,3 +65,26 @@ async def delete_user(
 ) -> dict[str, str]:
     """Permanently delete a user account and associated sessions."""
     return await UserService.delete_user(user_id, current_admin_id=str(admin.user_id))
+
+
+@router.get("/{user_id}/log-summary")
+async def user_log_summary(
+    user_id: str,
+    _admin: CurrentAdmin = Depends(require_admin),
+) -> dict[str, Any]:
+    """User history for support: sign-up, logins/logouts, app use, AI questions, AR game, IPs and devices."""
+    summary = await UserLogService.get_summary(user_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return summary
+
+
+@router.get("/{user_id}/activity")
+async def user_activity(
+    user_id: str,
+    limit: int = Query(500, ge=1, le=2000),
+    requests: bool = Query(True),
+    _admin: CurrentAdmin = Depends(require_admin),
+) -> List[dict[str, Any]]:
+    """Detail log: everything the user did (events and gateway requests), when and from where, newest first."""
+    return await UserLogService.get_activity(user_id, limit, requests)

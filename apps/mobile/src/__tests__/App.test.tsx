@@ -15,11 +15,13 @@ import { asyncStorageData, jwtExpiringIn, resetDeviceStorage, secureStoreData } 
 
 const USER_ID = '3f8a1c2e-5b7d-4e9f-a1b2-c3d4e5f60718';
 const initialState = useAuthStore.getState();
-const MODULES = [
-  { module_id: 'cell-explore', title: 'Explore the Cell', description: 'Tap organelles.', difficulty: 1, thumbnail_url: null },
-  { module_id: 'cell-quiz', title: 'Cell Quiz', description: 'Test yourself.', difficulty: 3, thumbnail_url: null },
-];
-const CONFIG = { module_id: 'cell-quiz', scene_name: 'GameScene_CellQuiz', cdn_bundle_url: 'https://cdn.example.com/bundles/cell-quiz', difficulty: 3, config: {} };
+const LEVEL_NAMES = ['The building blocks', 'A nucleotide', 'A single strand', 'Two strands', 'The double helix'];
+const PROGRESS = {
+  levels: LEVEL_NAMES.map((name, i) => ({ level: i + 1, name, status: i === 0 ? 'passed' : i === 1 ? 'skipped' : 'not_yet', current: i === 2 })),
+  level_count: 5, levels_passed: 1, levels_skipped: 1, current_level: 3, current_level_name: 'A single strand',
+  finished: false, times_finished: 0, sessions: 2, play_seconds: 754, parts_discovered: 7,
+  wildcards: 4, wildcards_used: 1, power_jumps: 0, back_used: 2, chat_questions: 5, last_played: '2026-10-14T10:00:00+00:00',
+};
 const PROFILE = { user_id: USER_ID, username: 'Shanto', email: 'shanto@example.com', detail_level: 1, language: 'en', created_at: '2026-10-01T00:00:00+00:00' };
 
 /** A small fake Gateway following docs/api-auth-home.md. */
@@ -38,10 +40,10 @@ function gateway(overrides: Partial<Record<string, ReturnType<MockHandler>>> = {
         return { status: 201, data: { user_id: USER_ID, token, profile: { detail_level: 1, language: 'en' } } };
       case `/api/users/${USER_ID}/profile`:
         return { status: 200, data: PROFILE };
-      case '/api/modules':
-        return { status: 200, data: MODULES };
-      case '/api/modules/cell-quiz/config':
-        return { status: 200, data: CONFIG };
+      case '/api/ar/progress':
+        return { status: 200, data: PROGRESS };
+      case '/api/events':
+        return { status: 200, data: {} };
       default:
         return { status: 404, data: errorBody('NOT_FOUND', 'Not found') };
     }
@@ -73,14 +75,14 @@ it('fresh install: splash, then the Login screen', async () => {
   expect(screen.queryByTestId('splash-screen')).not.toBeOnTheScreen();
 });
 
-it('saved login survives a restart: opens straight on Home', async () => {
+it('saved login survives a restart: opens straight on Topics', async () => {
   saveSession(jwtExpiringIn(60, USER_ID));
   installMockAdapter(ApiClient, gateway());
 
   await render(<App />);
 
   expect(await screen.findByTestId('home-greeting')).toHaveTextContent('Hi, Shanto!');
-  expect(await screen.findByText('Explore the Cell')).toBeOnTheScreen();
+  expect(screen.getByTestId('topic-dna')).toBeOnTheScreen();
   expect(screen.queryByTestId('login-screen')).not.toBeOnTheScreen();
 });
 
@@ -94,17 +96,38 @@ it('expired saved login: back to Login with a notice', async () => {
   expect(secureStoreData().size).toBe(0);
 });
 
-it('login → Home → open a module → ARGame shows its scene', async () => {
+it('login → Topics → DNA page with the progress dashboard → AR game and chat', async () => {
   installMockAdapter(ApiClient, gateway());
   await render(<App />);
 
   await typeAndLogin();
 
   expect(await screen.findByTestId('home-greeting')).toBeOnTheScreen();
-  await fireEvent.press(await screen.findByTestId('module-cell-quiz'));
+  await fireEvent.press(screen.getByTestId('topic-dna'));
 
-  expect(await screen.findByTestId('argame-scene-name')).toHaveTextContent('GameScene_CellQuiz');
+  // dashboard: only the wildcard total is shown, never how it is made up
+  expect(await screen.findByTestId('dna-progress-headline')).toHaveTextContent('Level 3 of 5 · A single strand');
+  expect(screen.getByTestId('stat-levels')).toHaveTextContent(/2\/5\s*Levels done/);
+  expect(screen.getByTestId('stat-wildcards')).toHaveTextContent(/(^|\D)4\s*Wildcards/);
+  expect(screen.getByTestId('stat-time')).toHaveTextContent(/12m\s*Play time/);
+  expect(screen.getByTestId('stat-back')).toHaveTextContent(/(^|\D)2\s*Back used/);
+  expect(screen.getByTestId('level-1-passed')).toBeOnTheScreen();
+  expect(screen.getByTestId('level-2-skipped')).toBeOnTheScreen();
+  expect(screen.queryByText(/gift|default/i)).not.toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByTestId('dna-ar-button'));
+  expect(await screen.findByTestId('argame-scene-name')).toHaveTextContent('Root_ARPersistent');
   expect(screen.getByTestId('argame-unity-unavailable')).toBeOnTheScreen();
+});
+
+it('the DNA page explains when progress cannot be loaded', async () => {
+  saveSession(jwtExpiringIn(60, USER_ID));
+  installMockAdapter(ApiClient, gateway({ '/api/ar/progress': 'network-error' }));
+  await render(<App />);
+
+  await fireEvent.press(await screen.findByTestId('topic-dna'));
+  expect(await screen.findByTestId('dna-progress-error')).toHaveTextContent(/Couldn't load your progress/);
+  expect(screen.getByTestId('dna-chat-button')).toBeOnTheScreen();
 });
 
 it('wrong password keeps the user on Login with an error', async () => {
@@ -126,7 +149,7 @@ it('backend offline shows a network error on Login', async () => {
   expect(await screen.findByTestId('login-error')).toHaveTextContent(/Can't reach the server/);
 });
 
-it('sign up from Login → auto-login → Home', async () => {
+it('sign up from Login → auto-login → Topics', async () => {
   installMockAdapter(ApiClient, gateway());
   await render(<App />);
 
@@ -159,14 +182,15 @@ it('logout returns to Login and purges stored credentials', async () => {
   expect(asyncStorageData().size).toBe(0);
 });
 
-it('a 401 from the server on Home returns to Login with the server message', async () => {
+it('a 401 from the server on the DNA page returns to Login with the server message', async () => {
   saveSession(jwtExpiringIn(60, USER_ID));
   installMockAdapter(
     ApiClient,
-    gateway({ '/api/modules': { status: 401, data: errorBody('TOKEN_INVALID', 'Your session is not valid. Please log in again.') } }),
+    gateway({ '/api/ar/progress': { status: 401, data: errorBody('TOKEN_INVALID', 'Your session is not valid. Please log in again.') } }),
   );
 
   await render(<App />);
+  await fireEvent.press(await screen.findByTestId('topic-dna'));
 
   expect(await screen.findByTestId('login-notice')).toHaveTextContent(/Your session is not valid/);
 });

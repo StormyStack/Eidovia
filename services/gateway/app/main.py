@@ -17,7 +17,8 @@ from app import repositories as repo
 from app.config import get_settings
 from app.db import db
 from app.errors import register_error_handlers
-from app.routers import auth, chat, modules, users
+from app import request_log
+from app.routers import ar, auth, chat, modules, users
 from app.schemas import HealthResponse
 
 logging.basicConfig(
@@ -67,10 +68,12 @@ app = FastAPI(
 )
 
 register_error_handlers(app)
+app.middleware("http")(request_log.middleware)   # technical request log (admin "Technical" tab)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(modules.router)
 app.include_router(chat.router)
+app.include_router(ar.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])

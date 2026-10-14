@@ -104,7 +104,6 @@ export function ChatScreen({ route }: ScreenProps<'Chat'>) {
         role: 'assistant',
         text: response.answer,
         timestamp: new Date().toISOString(),
-        cached: response.cached,
       });
 
       void AiService.logEvent({
@@ -176,7 +175,6 @@ export function ChatScreen({ route }: ScreenProps<'Chat'>) {
                   <Text style={isUser ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
                     {item.text}
                   </Text>
-                  {item.cached && <Text style={styles.cachedBadge}>⚡ cached</Text>}
                 </View>
               </View>
             );
@@ -283,7 +281,6 @@ const styles = StyleSheet.create({
   bubbleAssistant: { backgroundColor: palette.surface, borderBottomLeftRadius: radius.sm },
   bubbleTextUser: { ...typography.body, color: palette.onPrimary, lineHeight: 22 },
   bubbleTextAssistant: { ...typography.body, color: palette.text, lineHeight: 22 },
-  cachedBadge: { ...typography.caption, color: palette.textMuted, marginTop: spacing.xxs, fontSize: 11 },
 
   // Input bar
   inputBar: {
