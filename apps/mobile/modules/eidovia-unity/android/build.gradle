@@ -1,0 +1,30 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.eidoviaunity'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.eidoviaunity"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // The Unity game, exported from Unity with  Eidovia > Export for Mobile App  (linked by the config plugin)
+  def unityLibrary = rootProject.findProject(':unityLibrary')
+  if (unityLibrary != null) {
+    implementation unityLibrary
+    // unityLibrary keeps unity-classes.jar to itself (implementation), so compile against it here;
+    // at runtime the classes come from unityLibrary
+    compileOnly files("${unityLibrary.projectDir}/libs/unity-classes.jar")
+  } else {
+    throw new GradleException(
+      "Unity library not found. Open the AR Game project in Unity and run 'Eidovia > Export for Mobile App', " +
+      "then run 'npx expo prebuild --platform android --clean' again.")
+  }
+}

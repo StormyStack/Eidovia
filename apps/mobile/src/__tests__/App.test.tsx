@@ -104,7 +104,7 @@ it('login → Home → open a module → ARGame shows its scene', async () => {
   await fireEvent.press(await screen.findByTestId('module-cell-quiz'));
 
   expect(await screen.findByTestId('argame-scene-name')).toHaveTextContent('GameScene_CellQuiz');
-  expect(screen.getByTestId('argame-sprint-note')).toBeOnTheScreen();
+  expect(screen.getByTestId('argame-unity-unavailable')).toBeOnTheScreen();
 });
 
 it('wrong password keeps the user on Login with an error', async () => {

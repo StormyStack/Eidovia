@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { errorBody, installMockAdapter, type MockHandler, type MockReply } from '../../test-utils/mockAdapter';
 import { renderScreen } from '../../test-utils/render';
 import { jwtExpiringIn, resetDeviceStorage } from '../../test-utils/storage';
+import { DNA_AR } from '../ARGameScreen';
 import { HomeScreen } from '../HomeScreen';
 
 const USER_ID = '3f8a1c2e-5b7d-4e9f-a1b2-c3d4e5f60718';
@@ -138,6 +139,15 @@ it('tapping a module fetches its config and opens ARGame with it', async () => {
 
   await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('ARGame', { config: CONFIG, title: 'Cell Quiz' }));
   expect(calls.find((c) => c.url === '/api/modules/cell-quiz/config')?.authorization).toMatch(/^Bearer /);
+});
+
+it('the Explore DNA in AR button opens the Unity AR game', async () => {
+  server(routes({ '/api/modules': { status: 200, data: MODULES } }));
+  const { navigation } = await renderScreen(HomeScreen, 'Home');
+
+  await fireEvent.press(await screen.findByTestId('home-ar-button'));
+
+  expect(navigation.navigate).toHaveBeenCalledWith('ARGame', DNA_AR);
 });
 
 it('shows a clear message if the module no longer exists', async () => {

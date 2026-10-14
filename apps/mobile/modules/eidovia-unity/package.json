@@ -1,0 +1,7 @@
+{
+  "name": "eidovia-unity",
+  "version": "1.0.0",
+  "description": "Embeds the Eidovia DNA AR Unity game (Unity as a Library) in the Expo app",
+  "main": "index.ts",
+  "private": true
+}

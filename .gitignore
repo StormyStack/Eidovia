@@ -73,3 +73,9 @@ Thumbs.db
 
 # ─── Logs ──────────────────────────────────────────────────────
 *.log
+
+# Eidovia AR game: generated native projects and the Unity export (re-created by prebuild / Unity)
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/unity/builds/
+apps/mobile/dist/

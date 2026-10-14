@@ -7,10 +7,11 @@ import { Banner } from '../components/Banner';
 import { ModuleCard } from '../components/ModuleCard';
 import { LoadingState, MessageState } from '../components/StateView';
 import type { ScreenProps } from '../navigation/types';
+import { DNA_AR } from './ARGameScreen';
 import { Api, ApiError, toApiError } from '../services/ApiClient';
 import type { ModuleSummary } from '../services/types';
 import { useAuthStore } from '../store/authStore';
-import { layout, palette, spacing, typography } from '../theme';
+import { layout, palette, radius, spacing, typography } from '../theme';
 
 type LoadMode = 'initial' | 'refresh' | 'retry';
 
@@ -129,6 +130,22 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
         {greeting}
       </Text>
       <Text style={styles.subtitle}>Choose a module to start learning in AR.</Text>
+      <Pressable
+        onPress={() => navigation.navigate('ARGame', DNA_AR)}
+        accessibilityRole="button"
+        accessibilityLabel="Explore DNA in AR"
+        testID="home-ar-button"
+        style={({ pressed }) => [styles.arButton, pressed && styles.arButtonPressed]}
+      >
+        <View style={styles.arIcon}>
+          <Ionicons name="cube" size={26} color={palette.onPrimary} />
+        </View>
+        <View style={styles.arText}>
+          <Text style={styles.arTitle}>Explore DNA in AR</Text>
+          <Text style={styles.arCaption}>Place the DNA model in your room and discover its parts</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={22} color={palette.onPrimary} />
+      </Pressable>
       {actionError ? <Banner tone="error" message={actionError} onDismiss={() => setActionError(null)} testID="home-action-error" /> : null}
       {status === 'ready' && loadError ? (
         <Banner tone="error" message={`Couldn't refresh: ${loadError.message}`} onDismiss={() => setLoadError(null)} testID="home-refresh-error" />
@@ -243,4 +260,26 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   chatFabPressed: { backgroundColor: palette.primaryPressed },
+  // "Explore DNA in AR" button (the Unity game)
+  arButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: palette.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  arButtonPressed: { backgroundColor: palette.primaryPressed },
+  arIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arText: { flex: 1 },
+  arTitle: { ...typography.label, color: palette.onPrimary, fontSize: 17 },
+  arCaption: { ...typography.caption, color: palette.onPrimary, opacity: 0.85, marginTop: 2 },
 });
