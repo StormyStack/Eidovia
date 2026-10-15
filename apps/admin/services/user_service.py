@@ -9,6 +9,7 @@ from db import db
 from redis_client import get_redis
 from security import hash_password
 from schemas import AdminUserCreate, AdminUserUpdate, AdminPasswordReset
+from services import admin_audit
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class UserService:
             }
 
     @staticmethod
-    async def create_user(data: AdminUserCreate) -> dict[str, Any]:
+    async def create_user(data: AdminUserCreate, admin: Any = None) -> dict[str, Any]:
         async with db.get_session() as session:
             existing = await session.execute(
                 text("SELECT user_id FROM users WHERE lower(username) = lower(:u) OR lower(email) = lower(:e)"),
@@ -106,7 +107,13 @@ class UserService:
                 },
             )
             created = res.first()
+            await admin_audit.record(session, admin, "admin_created" if data.is_admin else "user_created",
+                                     str(created.user_id), {"username": data.username, "email": data.email,
+                                                            "is_admin": data.is_admin, "level": data.detail_level})
             await session.commit()
+            if not data.is_admin:
+                await admin_audit.user_event("account_updated_by_admin", str(created.user_id), data.username, {
+                    "by": admin.username if admin else None, "created": True})
             return {
                 "user_id": str(created.user_id),
                 "username": data.username,
@@ -118,18 +125,19 @@ class UserService:
             }
 
     @staticmethod
-    async def update_user(user_id: str, data: AdminUserUpdate, current_admin_id: str) -> dict[str, Any]:
+    async def update_user(user_id: str, data: AdminUserUpdate, current_admin_id: str, admin: Any = None) -> dict[str, Any]:
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid user ID format")
 
         async with db.get_session() as session:
-            existing = await session.execute(
-                text("SELECT user_id FROM users WHERE user_id = :uid"),
+            old = (await session.execute(
+                text("SELECT username, email, detail_level, language, COALESCE(is_admin, FALSE) AS is_admin "
+                     "FROM users WHERE user_id = :uid FOR UPDATE"),
                 {"uid": uid},
-            )
-            if not existing.first():
+            )).first()
+            if not old:
                 raise HTTPException(status_code=404, detail="User not found")
 
             updates = []
@@ -166,6 +174,8 @@ class UserService:
             if data.is_admin is not None:
                 if not data.is_admin and current_admin_id == user_id:
                     raise HTTPException(status_code=400, detail="Cannot revoke your own admin rights")
+                if not data.is_admin and old.is_admin and await _admin_count(session) <= 1:
+                    raise HTTPException(status_code=400, detail="Cannot remove the last administrator")
                 updates.append("is_admin = :is_admin")
                 params["is_admin"] = data.is_admin
 
@@ -179,7 +189,18 @@ class UserService:
             """
             res = await session.execute(text(sql), params)
             updated = res.first()
+            changes = {f: {"from": getattr(old, f), "to": getattr(updated, f)}
+                       for f in ("username", "email", "detail_level", "language", "is_admin")
+                       if (bool(getattr(old, f)) if f == "is_admin" else getattr(old, f))
+                       != (bool(getattr(updated, f)) if f == "is_admin" else getattr(updated, f))}
+            if changes:
+                role = changes.get("is_admin")
+                action = ("admin_role_granted" if role and role["to"] else "admin_role_revoked" if role else "user_updated")
+                await admin_audit.record(session, admin, action, str(uid), {"changes": changes})
             await session.commit()
+            if changes:
+                await admin_audit.user_event("account_updated_by_admin", str(uid), updated.username, {
+                    "by": admin.username if admin else None, "changes": changes})
 
             return {
                 "user_id": str(updated.user_id),
@@ -192,7 +213,8 @@ class UserService:
             }
 
     @staticmethod
-    async def reset_password(user_id: str, data: AdminPasswordReset, admin_username: str = "admin") -> dict[str, Any]:
+    async def reset_password(user_id: str, data: AdminPasswordReset, admin_username: str = "admin",
+                             admin: Any = None) -> dict[str, Any]:
         """Set a new password. Also resolves the user's open "forgot password" support requests."""
         try:
             uid = uuid.UUID(user_id)
@@ -226,6 +248,7 @@ class UserService:
                 """), {"u": str(uid), "note": f"Password reset by {admin_username}."})).all())
             except Exception:
                 pass    # support_tickets.kind not there yet (migration 008)
+            await admin_audit.record(session, admin, "password_reset", str(uid), {"requests_resolved": resolved})
             await session.commit()
 
         try:
@@ -240,7 +263,7 @@ class UserService:
         return {"status": "password_reset_success", "username": row.username, "requests_resolved": resolved}
 
     @staticmethod
-    async def delete_user(user_id: str, current_admin_id: str) -> dict[str, str]:
+    async def delete_user(user_id: str, current_admin_id: str, admin: Any = None) -> dict[str, str]:
         try:
             uid = uuid.UUID(user_id)
         except ValueError:
@@ -251,12 +274,14 @@ class UserService:
 
         async with db.get_session() as session:
             existing = await session.execute(
-                text("SELECT username FROM users WHERE user_id = :uid"),
+                text("SELECT username, email, COALESCE(is_admin, FALSE) AS is_admin FROM users WHERE user_id = :uid"),
                 {"uid": uid},
             )
             row = existing.first()
             if not row:
                 raise HTTPException(status_code=404, detail="User not found")
+            if row.is_admin and await _admin_count(session) <= 1:
+                raise HTTPException(status_code=400, detail="Cannot delete the last administrator")
 
             # Clean associated records
             try:
@@ -266,6 +291,15 @@ class UserService:
                 pass
 
             await session.execute(text("DELETE FROM users WHERE user_id = :uid"), {"uid": uid})
+            # the account is gone, the audit record stays (the user's activity log rows in audit_logs stay too)
+            await admin_audit.record(session, admin, "admin_deleted" if row.is_admin else "user_deleted", user_id,
+                                     {"username": row.username, "email": row.email})
             await session.commit()
 
         return {"status": "deleted", "username": row.username}
+
+
+async def _admin_count(session) -> int:
+    """Administrator accounts right now (the last one can be neither demoted nor deleted)."""
+    row = (await session.execute(text("SELECT count(*) AS n FROM users WHERE is_admin = TRUE"))).first()
+    return int(row.n) if row else 0

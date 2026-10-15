@@ -80,7 +80,8 @@ async def process_logs():
             # Filtering logic: Only save known events.
             # E.g. user login logout, how many message send, app opened, AR game progress (ar_*), wildcards (wildcard_*), DNA quiz (quiz_*)
             if action not in ["login", "logout", "register", "message_sent", "app_open", "profile_updated", "password_changed",
-                              "password_reset_requested", "password_reset_by_admin"] and not action.startswith(("ar_", "wildcard", "quiz_")):
+                              "password_reset_requested", "password_reset_by_admin", "login_failed",
+                              "account_updated_by_admin"] and not action.startswith(("ar_", "wildcard", "quiz_")):
                 logger.info(f"Skipping unknown action: {action}")
                 continue
 

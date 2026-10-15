@@ -58,6 +58,7 @@ class DatabaseService:
         async with self.async_session_maker() as session:
             try:
                 yield session
+                await session.commit()      # commit on success (writers that commit themselves are unaffected)
             except Exception:
                 await session.rollback()
                 raise

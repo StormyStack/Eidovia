@@ -26,9 +26,11 @@ the learner only sees the total). The AR game is feature "ar":
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
+from fastapi import HTTPException
 from sqlalchemy import text
 from db import db
 from redis_client import get_redis
+from services import admin_audit
 
 LEVEL_NAMES = ["The building blocks", "A nucleotide", "A single strand", "Two strands", "The double helix"]
 AR_ACTIONS = ("('ar_session_start','ar_session_end','ar_part_discovered','ar_stage_completed','ar_journey_completed',"
@@ -54,7 +56,21 @@ CREATE TABLE IF NOT EXISTS wildcard_wallets (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 )
-"""]
+""",
+    # every wildcard movement (same definition as migration 010 / the gateway)
+    """CREATE TABLE IF NOT EXISTS wildcard_ledger (
+         entry_id BIGSERIAL PRIMARY KEY,
+         user_id TEXT NOT NULL,
+         delta INT NOT NULL,
+         reason TEXT NOT NULL,
+         ref TEXT,
+         idempotency_key TEXT UNIQUE,
+         gift_after INT,
+         default_after INT,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )""",
+    "CREATE INDEX IF NOT EXISTS idx_wildcard_ledger_user ON wildcard_ledger(user_id, created_at DESC)",
+]
 _table_ready = False
 
 
@@ -279,18 +295,40 @@ class ArService:
         ]
 
     @staticmethod
-    async def grant_wildcards(user_id: str, amount: int, admin_username: str) -> Optional[dict[str, Any]]:
+    async def grant_wildcards(user_id: str, amount: int, admin_username: str, request_key: Optional[str] = None,
+                              admin: Any = None) -> Optional[dict[str, Any]]:
         """
         Give a learner wildcards (never take). They go to the default cards; the game shows them within
         30 s if it is open, otherwise the next time AR opens. Returns None when the learner does not exist.
+
+        request_key: one key per "Give" form; sending the same key again (double click, retry) returns the first
+        result instead of giving the cards twice. Every grant is a wildcard_ledger row ('admin_grant', ref = admin)
+        and an admin_audit_log row, in the same transaction as the wallet change.
         """
+        if not 1 <= int(amount) <= MAX_GIFT:
+            raise HTTPException(status_code=400, detail=f"Give 1 to {MAX_GIFT} wildcards")
+        ledger_key = f"admin_grant:{request_key}" if request_key else None
         async with db.get_session() as session:
             user = (await session.execute(
-                text("SELECT username FROM users WHERE user_id = :uid"), {"uid": user_id}
+                text("SELECT username, COALESCE(is_admin, FALSE) AS is_admin FROM users WHERE user_id::text = :uid"),
+                {"uid": str(user_id)}
             )).first()
             if not user:
                 return None
+            if user.is_admin:
+                raise HTTPException(status_code=409, detail="Administrator accounts have no wildcards")
             await _ensure_table(session)
+            if ledger_key:
+                await session.execute(text("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(CAST(:k AS TEXT)))"),
+                                      {"k": ledger_key})
+                done = (await session.execute(text(
+                    "SELECT delta FROM wildcard_ledger WHERE idempotency_key = CAST(:k AS TEXT)"), {"k": ledger_key})).first()
+                if done:
+                    w = (await session.execute(text(
+                        "SELECT gift_cards, default_cards FROM wildcard_wallets WHERE user_id = CAST(:uid AS TEXT)"),
+                        {"uid": str(user_id)})).first()
+                    return {"user_id": str(user_id), "username": user.username, "amount": done.delta, "duplicate": True,
+                            "gift": w.gift_cards, "default": w.default_cards, "total": w.gift_cards + w.default_cards}
             w = (await session.execute(text("""
                 INSERT INTO wildcard_wallets (user_id, default_cards, unseen)
                 VALUES (CAST(:uid AS TEXT), CAST(:first AS INT), CAST(:amount AS INT))
@@ -299,6 +337,14 @@ class ArService:
                         unseen = wildcard_wallets.unseen + CAST(:amount AS INT), updated_at = now()
                 RETURNING gift_cards, default_cards
             """), {"uid": str(user_id), "amount": amount, "first": START_CARDS + amount})).first()
+            await session.execute(text("""
+                INSERT INTO wildcard_ledger (user_id, delta, reason, ref, idempotency_key, gift_after, default_after)
+                VALUES (CAST(:u AS TEXT), CAST(:d AS INT), 'admin_grant', CAST(:by AS TEXT), CAST(:k AS TEXT),
+                        CAST(:g AS INT), CAST(:df AS INT))
+            """), {"u": str(user_id), "d": amount, "by": admin_username, "k": ledger_key,
+                   "g": w.gift_cards, "df": w.default_cards})
+            await admin_audit.record(session, admin, "wildcards_granted", str(user_id), {
+                "amount": amount, "gift_after": w.gift_cards, "default_after": w.default_cards, "by": admin_username})
         wallet = {"gift": w.gift_cards, "default": w.default_cards, "total": w.gift_cards + w.default_cards}
         try:
             r = await get_redis()
@@ -311,4 +357,4 @@ class ArService:
             }))
         except Exception:
             pass    # the cards are saved; only the log line is missing
-        return {"user_id": user_id, "username": user.username, "amount": amount, **wallet}
+        return {"user_id": user_id, "username": user.username, "amount": amount, "duplicate": False, **wallet}

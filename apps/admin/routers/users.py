@@ -32,10 +32,10 @@ async def get_user_details(
 @router.post("", response_model=UserProfileResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: AdminUserCreate,
-    _admin: CurrentAdmin = Depends(require_admin),
+    admin: CurrentAdmin = Depends(require_admin),
 ) -> dict[str, Any]:
     """Provision a new student or administrative account."""
-    return await UserService.create_user(body)
+    return await UserService.create_user(body, admin)
 
 
 @router.patch("/{user_id}", response_model=UserProfileResponse)
@@ -45,7 +45,7 @@ async def update_user(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict[str, Any]:
     """Update profile attributes or modify role privileges for a user."""
-    return await UserService.update_user(user_id, body, current_admin_id=str(admin.user_id))
+    return await UserService.update_user(user_id, body, current_admin_id=str(admin.user_id), admin=admin)
 
 
 @router.post("/{user_id}/reset-password")
@@ -55,7 +55,7 @@ async def reset_password(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict[str, Any]:
     """Administrative password reset (also resolves the user's open "forgot password" requests)."""
-    return await UserService.reset_password(user_id, body, admin.username)
+    return await UserService.reset_password(user_id, body, admin.username, admin)
 
 
 @router.delete("/{user_id}")
@@ -64,7 +64,7 @@ async def delete_user(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict[str, str]:
     """Permanently delete a user account and associated sessions."""
-    return await UserService.delete_user(user_id, current_admin_id=str(admin.user_id))
+    return await UserService.delete_user(user_id, current_admin_id=str(admin.user_id), admin=admin)
 
 
 @router.get("/{user_id}/log-summary")

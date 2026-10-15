@@ -79,6 +79,8 @@ async def login(body: LoginRequest) -> AuthResponse:
 
     if not await verify_password(body.password, user.password_hash):
         note(user_id=str(user.user_id), username=user.username, detail="login failed: wrong password")
+        await push_log_event("login_failed", str(user.user_id), user.username, bool(user.is_admin),
+                             {"reason": "wrong password"})
         raise errors.invalid_credentials()
 
     user_id = str(user.user_id)

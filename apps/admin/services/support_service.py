@@ -133,7 +133,7 @@ class SupportService:
             return _ticket(row)
 
     @staticmethod
-    async def give_wildcards(ticket_id: str, amount: int, admin_username: str, note: Optional[str]) -> dict[str, Any]:
+    async def give_wildcards(ticket_id: str, amount: int, admin_username: str, note: Optional[str], admin: Any = None) -> dict[str, Any]:
         """Answer a wildcard request: give the cards (added to the learner's default) and resolve the ticket."""
         from services.ar_service import ArService
         try:
@@ -149,7 +149,7 @@ class SupportService:
             raise HTTPException(status_code=404, detail="Ticket not found")
         if row.status == "resolved":
             raise HTTPException(status_code=409, detail="This request is already resolved")
-        gift = await ArService.grant_wildcards(row.user_id, amount, admin_username)
+        gift = await ArService.grant_wildcards(row.user_id, amount, admin_username, request_key=f"ticket:{tid}", admin=admin)
         if gift is None:
             raise HTTPException(status_code=404, detail="Learner not found")
         notes = (note or "").strip() or f"Gave you {amount} wildcard{'s' if amount != 1 else ''}. Have fun!"

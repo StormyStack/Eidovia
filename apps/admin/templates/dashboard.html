@@ -276,6 +276,30 @@
         .bar > span { display:block; height:100%; background:var(--primary); }
         .qz-lbl { font-size:0.75rem; display:flex; gap:0.3rem; align-items:center; color:var(--text-muted); }
         .qz-pager { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; padding:0.75rem 1.25rem; font-size:0.8rem; }
+        /* Users / user profile / Administrators */
+        .ac-header { flex-wrap: wrap; gap: 0.75rem; }
+        .ac-tools { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+        .ac-sub { font-size:0.78rem; color:var(--text-muted); font-weight:400; }
+        .ac-empty { text-align:center; color:var(--text-muted); padding:1.5rem; }
+        .ac-note { font-size:0.78rem; color:var(--text-muted); padding:0.6rem 1.5rem; border-bottom:1px solid var(--border); background:#f8fafc; }
+        .name-link { font-weight:700; color:var(--primary); text-decoration:none; }
+        .name-link:hover { text-decoration:underline; }
+        .hist-k { font-size:0.7rem; text-transform:uppercase; color:var(--text-muted); font-weight:600; }
+        .up-head { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:1.25rem 1.5rem; flex-wrap:wrap; }
+        .up-head-wallet { text-align:right; cursor:pointer; border:1px solid var(--border); border-radius:0.5rem; padding:0.6rem 1rem; background:#fffbeb; }
+        .up-balance { font-size:2rem; font-weight:800; line-height:1.1; color:#b45309; }
+        .up-tabs { display:flex; gap:0.25rem; padding:0 1rem; border-top:1px solid var(--border); overflow-x:auto; }
+        .up-tab { padding:0.7rem 0.9rem; border:none; background:none; font-weight:600; font-size:0.85rem; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+        .up-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+        .up-pane { display:none; } .up-pane.active { display:block; }
+        .up-body { padding:1.25rem 1.5rem; }
+        .up-wallet { display:flex; justify-content:space-between; align-items:flex-end; gap:1.5rem; flex-wrap:wrap; }
+        .up-grant { display:flex; flex-direction:column; gap:0.35rem; max-width:360px; }
+        .up-action { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.9rem 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+        .ac-toast { position:fixed; right:1.25rem; bottom:1.25rem; z-index:3000; max-width:420px; padding:0.75rem 1rem; border-radius:0.5rem; font-size:0.85rem; box-shadow:0 10px 25px rgba(15,23,42,0.2); display:none; }
+        .ac-toast.ok { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+        .ac-toast.err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+        @media (max-width: 720px) { .ac-tools input.form-control { width:100% !important; } .up-head-wallet { text-align:left; } }
         .ar-legend { font-size:0.75rem; color:var(--text-muted); display:flex; gap:1rem; align-items:center; }
         .modal.modal-wide { max-width: 820px; max-height: 85vh; overflow-y: auto; }
         .modal.modal-xl { max-width: 1100px; width: 95vw; max-height: 90vh; overflow-y: auto; }
@@ -333,7 +357,11 @@
             </li>
             <li class="sidebar-item" onclick="navigate('tab-users')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                <span>Users & Accounts</span>
+                <span>Users</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-admins')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <span>Administrators</span>
             </li>
             <li class="sidebar-item" onclick="navigate('tab-support')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -659,54 +687,34 @@
                     </div>
                 </div>
 
-                <!-- TAB: AR GAME -->
+                <!-- TAB: AR GAME (who is playing, how far they got, where they get stuck) -->
                 <div id="tab-ar" class="tab-panel">
                     <div class="metrics-grid">
                         <div class="metric-card">
-                            <span class="title">AR Players</span>
+                            <span class="title">Learners Playing</span>
                             <span id="ar-players" class="value">0</span>
                             <span id="ar-players-sub" class="subtitle">of 0 learners</span>
                         </div>
                         <div class="metric-card">
-                            <span class="title">Finished All Levels</span>
+                            <span class="title">Finished All 5 Levels</span>
                             <span id="ar-finished" class="value">0</span>
-                            <span class="subtitle">Completed the DNA journey</span>
+                            <span id="ar-finished-sub" class="subtitle">built the whole double helix</span>
                         </div>
                         <div class="metric-card">
-                            <span class="title">Levels Passed</span>
-                            <span id="ar-passed" class="value">0</span>
-                            <span id="ar-skipped-sub" class="subtitle">0 skipped with a wildcard</span>
+                            <span class="title">Hardest Level</span>
+                            <span id="ar-hardest" class="value">--</span>
+                            <span id="ar-hardest-sub" class="subtitle">lowest pass rate</span>
                         </div>
                         <div class="metric-card">
-                            <span class="title">AR Sessions</span>
-                            <span id="ar-sessions" class="value">0</span>
-                            <span id="ar-avg-sub" class="subtitle">avg --</span>
-                        </div>
-                        <div class="metric-card">
-                            <span class="title">Total Play Time</span>
-                            <span id="ar-playtime" class="value">0m</span>
-                            <span id="ar-24h-sub" class="subtitle">0 players in last 24h</span>
-                        </div>
-                        <div class="metric-card">
-                            <span class="title">Parts Discovered</span>
-                            <span id="ar-parts" class="value">0</span>
-                            <span id="ar-last-sub" class="subtitle">last activity --</span>
-                        </div>
-                        <div class="metric-card">
-                            <span class="title">Wildcards Used</span>
-                            <span id="ar-wild" class="value">0</span>
-                            <span id="ar-wild-sub" class="subtitle">0 cards spent</span>
-                        </div>
-                        <div class="metric-card">
-                            <span class="title">Back Button Used</span>
-                            <span id="ar-back" class="value">0</span>
-                            <span id="ar-given-sub" class="subtitle">0 wildcards given by admins</span>
+                            <span class="title">Need Attention</span>
+                            <span id="ar-attention" class="value">0</span>
+                            <span class="subtitle">not finished, no play for 7+ days</span>
                         </div>
                     </div>
 
                     <div class="card">
                         <div class="card-header">
-                            <h3>Level Progress</h3>
+                            <h3>Level Progress <span class="ac-sub">how many learners pass each level on their own</span></h3>
                             <button class="btn btn-secondary btn-sm" onclick="fetchAr()">Refresh</button>
                         </div>
                         <div class="table-responsive">
@@ -714,14 +722,11 @@
                                 <thead>
                                     <tr>
                                         <th>Level</th>
-                                        <th>Name</th>
                                         <th>Reached</th>
                                         <th>Passed</th>
-                                        <th>Skipped (wildcard)</th>
+                                        <th>Skipped with a wildcard</th>
                                         <th>Pass rate</th>
-                                        <th>Avg time</th>
-                                        <th>Best time</th>
-                                        <th>Parts found</th>
+                                        <th>Average time</th>
                                     </tr>
                                 </thead>
                                 <tbody id="ar-levels-body"></tbody>
@@ -730,10 +735,16 @@
                     </div>
 
                     <div class="card">
-                        <div class="card-header">
-                            <h3>Players</h3>
-                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <div class="card-header ac-header">
+                            <h3>Learner Progress <span class="ac-sub">click a name for the full profile</span></h3>
+                            <div class="ac-tools">
                                 <span class="ar-legend"><span><span class="lv lv-passed">1</span>passed</span><span><span class="lv lv-skipped">1</span>skipped</span><span><span class="lv">1</span>not yet</span></span>
+                                <select id="ar-filter" class="form-control" style="width:160px;" onchange="renderArPlayers(arPlayers)">
+                                    <option value="all">All learners</option>
+                                    <option value="attention">Need attention</option>
+                                    <option value="progress">In progress</option>
+                                    <option value="finished">Finished</option>
+                                </select>
                                 <input type="text" id="ar-search" class="form-control" style="width: 200px;" placeholder="Search learner..." oninput="debounceArSearch()">
                                 <button class="btn btn-secondary btn-sm" onclick="exportArCsv()">Export CSV</button>
                             </div>
@@ -744,15 +755,11 @@
                                     <tr>
                                         <th>Learner</th>
                                         <th>Levels</th>
-                                        <th>Current level</th>
-                                        <th>Finished</th>
-                                        <th>Sessions</th>
+                                        <th>Now on</th>
+                                        <th>Status</th>
                                         <th>Play time</th>
-                                        <th>Parts</th>
-                                        <th>Wildcards</th>
-                                        <th>Back</th>
                                         <th>Last played</th>
-                                        <th style="text-align: right;">Details</th>
+                                        <th style="text-align: right;"></th>
                                     </tr>
                                 </thead>
                                 <tbody id="ar-players-body"></tbody>
@@ -761,30 +768,138 @@
                     </div>
                 </div>
 
-                <!-- TAB 2: USERS -->
+                <!-- TAB 2: USERS (app users only; administrators are in their own tab) -->
                 <div id="tab-users" class="tab-panel">
                     <div class="card">
-                        <div class="card-header">
-                            <h3>Learners & Administrator Accounts</h3>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="user-search" class="form-control" style="width: 250px;" placeholder="Search user or email..." oninput="debounceUserSearch()">
-                                <button class="btn btn-primary" onclick="openCreateUserModal()">+ Provision User</button>
+                        <div class="card-header ac-header">
+                            <h3>Users <span class="ac-sub">app learners · click a name to open the profile</span></h3>
+                            <div class="ac-tools">
+                                <input type="text" id="user-search" class="form-control" style="width: 250px;" placeholder="Search name or email..." oninput="debounceUserSearch()">
+                                <button class="btn btn-primary" onclick="openCreateUserModal(false)">+ Add user</button>
                             </div>
                         </div>
                         <div class="table-responsive">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Username</th>
+                                        <th>Name</th>
                                         <th>Email</th>
-                                        <th>Role</th>
-                                        <th>Detail Level</th>
-                                        <th>Language</th>
+                                        <th>Status</th>
+                                        <th>Level</th>
+                                        <th>Age</th>
+                                        <th>Gender</th>
+                                        <th>Wildcards</th>
+                                        <th>Last login</th>
                                         <th>Registered</th>
-                                        <th style="text-align: right;">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="users-table-body"></tbody>
+                                <tbody id="users-table-body"><tr><td colspan="9" class="ac-empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="qz-pager" id="users-pager"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: USER PROFILE (one app user: everything about them and every action on them) -->
+                <div id="tab-user-profile" class="tab-panel">
+                    <div style="margin-bottom:1rem;"><button class="btn btn-secondary btn-sm" onclick="backToUsers()">‹ All users</button></div>
+                    <div class="card" style="overflow:visible;">
+                        <div id="up-head" class="up-head"><div class="ac-empty">Loading…</div></div>
+                        <div class="up-tabs" role="tablist">
+                            <button class="up-tab active" data-tab="overview" onclick="upSelectTab('overview')">Overview</button>
+                            <button class="up-tab" data-tab="wildcards" onclick="upSelectTab('wildcards')">Wildcard management</button>
+                            <button class="up-tab" data-tab="activity" onclick="upSelectTab('activity')">Activity logs</button>
+                            <button class="up-tab" data-tab="actions" onclick="upSelectTab('actions')">Administrative actions</button>
+                        </div>
+                    </div>
+
+                    <div id="up-pane-overview" class="up-pane active"></div>
+
+                    <div id="up-pane-wildcards" class="up-pane">
+                        <div class="card"><div class="up-body">
+                            <div class="up-wallet">
+                                <div>
+                                    <div class="hist-k">Wildcard balance</div>
+                                    <div class="up-balance" id="upw-total">--</div>
+                                    <div class="ac-sub" id="upw-split"></div>
+                                </div>
+                                <div class="up-grant">
+                                    <label for="upw-amount" class="hist-k">Give wildcards (1-10)</label>
+                                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                                        <input type="number" id="upw-amount" class="form-control" min="1" max="10" step="1" value="1" style="width:90px;">
+                                        <button class="btn btn-primary" id="upw-give" onclick="submitProfileGrant()">Give wildcards</button>
+                                    </div>
+                                    <div class="ac-sub" id="upw-msg">Added to the user's default cards. Wildcards can only be given, not taken back.</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="card">
+                            <div class="card-header"><h3>Wildcard history</h3><span class="ac-sub" id="upw-since"></span></div>
+                            <div class="table-responsive"><table>
+                                <thead><tr><th>Date &amp; time</th><th>Change</th><th>Reason</th><th>Balance after</th><th>By</th></tr></thead>
+                                <tbody id="upw-body"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+
+                    <div id="up-pane-activity" class="up-pane">
+                        <div class="card">
+                            <div class="card-header ac-header">
+                                <h3>Activity logs</h3>
+                                <div class="ac-tools ac-filters">
+                                    <label class="qz-lbl">from <input type="date" id="ual-from" class="form-control" onchange="loadUserActivity(1)"></label>
+                                    <label class="qz-lbl">to <input type="date" id="ual-to" class="form-control" onchange="loadUserActivity(1)"></label>
+                                    <select id="ual-type" class="form-control" style="width:150px;" onchange="loadUserActivity(1)">
+                                        <option value="">All activity</option>
+                                        <option value="account">Account &amp; sign-in</option>
+                                        <option value="chat">AI chat</option>
+                                        <option value="ar">AR game</option>
+                                        <option value="wildcard">Wildcards</option>
+                                        <option value="quiz">DNA quiz</option>
+                                        <option value="admin">Admin actions</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                    <select id="ual-status" class="form-control" style="width:120px;" onchange="loadUserActivity(1)">
+                                        <option value="">Any status</option>
+                                        <option value="success">Succeeded</option>
+                                        <option value="failed">Failed</option>
+                                    </select>
+                                    <input type="text" id="ual-ip" class="form-control" style="width:140px;" placeholder="IP address" oninput="qzDebounce(() => loadUserActivity(1))">
+                                    <input type="text" id="ual-q" class="form-control" style="width:160px;" placeholder="Search..." oninput="qzDebounce(() => loadUserActivity(1))">
+                                    <button class="btn btn-secondary btn-sm" onclick="resetActivityFilters()">Reset</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="exportUserActivity()">Export page</button>
+                                </div>
+                            </div>
+                            <div class="ac-note" id="ual-note"></div>
+                            <div class="table-responsive"><table>
+                                <thead><tr><th>Date &amp; time</th><th>Activity</th><th>Details</th><th>IP address</th><th>Device</th><th>Status</th><th>Administrator</th></tr></thead>
+                                <tbody id="ual-body"></tbody>
+                            </table></div>
+                            <div class="qz-pager" id="ual-pager"></div>
+                        </div>
+                    </div>
+
+                    <div id="up-pane-actions" class="up-pane">
+                        <div class="card"><div class="up-body" id="up-actions"></div></div>
+                    </div>
+                </div>
+
+                <!-- TAB: ADMINISTRATORS (admin accounts only; users.is_admin) -->
+                <div id="tab-admins" class="tab-panel">
+                    <div class="card">
+                        <div class="card-header ac-header">
+                            <h3>Administrators <span class="ac-sub" id="admins-count"></span></h3>
+                            <div class="ac-tools">
+                                <button class="btn btn-primary" onclick="openCreateUserModal(true)">+ Add administrator</button>
+                            </div>
+                        </div>
+                        <div class="ac-note">Role in the current system: <strong>Admin</strong> (full access to the Admin Center). You cannot remove your own role or delete your own account, and the last administrator always stays.</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Registered</th><th style="text-align:right;">Actions</th></tr>
+                                </thead>
+                                <tbody id="admins-table-body"><tr><td colspan="7" class="ac-empty">Loading…</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -918,46 +1033,6 @@
         </div>
     </div>
 
-    <!-- MODAL: USER HISTORY (support) -->
-    <div id="user-history-modal" class="modal-overlay">
-        <div class="modal modal-xl">
-            <h3 id="uh-title">User history</h3>
-            <div id="uh-sub" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;"></div>
-            <div id="uh-summary"><div style="color:var(--text-muted);">Loading…</div></div>
-            <div style="display:flex; gap:0.75rem; align-items:center; margin:0.5rem 0 0.75rem;">
-                <button class="btn btn-primary btn-sm" onclick="loadUserDetailLog()">Detail log</button>
-                <button class="btn btn-secondary btn-sm" id="uh-gift" onclick="if (uhUserId) openGift(uhUserId, uhUsername)">+ Wildcards</button>
-                <label style="font-size:0.8rem; display:flex; gap:0.3rem; align-items:center;"><input type="checkbox" id="uh-requests" checked onchange="if (uhDetailLoaded) loadUserDetailLog()"> include technical requests</label>
-                <select id="uh-filter" class="form-control" style="width:170px;" onchange="filterUserDetailLog()">
-                    <option value="all">Everything</option>
-                    <option value="account">Account (sign-up, login, logout, app opened)</option>
-                    <option value="chat">AI chat</option>
-                    <option value="ar">AR game</option>
-                    <option value="wildcard">Wildcards</option>
-                    <option value="quiz">DNA quiz</option>
-                    <option value="request">Technical requests</option>
-                </select>
-                <button class="btn btn-secondary btn-sm" onclick="exportUserDetailLog()">Export CSV</button>
-            </div>
-            <div class="table-responsive" id="uh-detail-wrap" style="display:none;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>When</th>
-                            <th>Type</th>
-                            <th>What happened</th>
-                            <th>Where (IP · device)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="uh-detail"></tbody>
-                </table>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('user-history-modal')">Close</button>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL: QUIZ REQUEST DECISION -->
     <div id="qz-decide-modal" class="modal-overlay">
         <div class="modal">
@@ -1008,7 +1083,7 @@
     <!-- MODAL: CREATE USER -->
     <div id="create-modal" class="modal-overlay">
         <div class="modal">
-            <h3>Provision Account</h3>
+            <h3 id="create-title">Add account</h3>
             <div class="form-group">
                 <label>Username</label>
                 <input type="text" id="new-username" class="form-control" placeholder="e.g. biology_student">
@@ -1242,12 +1317,15 @@
                 'tab-tech': 'Application Technical Dashboard',
                 'tab-ar': 'AR Game Progress',
                 'tab-quiz': 'Quiz Activity & Performance',
-                'tab-users': 'User Account & Profile Management',
+                'tab-users': 'Users',
+                'tab-admins': 'Administrators',
+                'tab-user-profile': 'User Profile',
                 'tab-support': 'Learner Support & Assistance',
                 'tab-system': 'System Health & Maintenance',
                 'tab-logs': 'Live Audit Stream'
             };
             document.getElementById('page-title').textContent = titles[tabId] || 'Admin Center';
+            if (tabId === 'tab-users' || tabId === 'tab-admins') fetchAccounts();
         }
 
         async function loadDashboard() {
@@ -1296,50 +1374,6 @@
                         : `${ai.active_model} ${ai.model_loaded ? 'loaded in memory' : 'installed, loads on the next question'} | Ollama v${ai.version} | ${ai.latency_ms || '--'} ms`;
                 }
             } catch(e) { console.error(e); }
-        }
-
-        async function fetchUsers(search = '') {
-            try {
-                const url = search ? `/admin/users?q=${encodeURIComponent(search)}` : '/admin/users';
-                const res = await fetch(url, { headers: {'Authorization': 'Bearer ' + jwtToken} });
-                if (!res.ok) return;
-                const users = await res.json();
-                const tbody = document.getElementById('users-table-body');
-                tbody.innerHTML = '';
-                if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b;">No users registered yet.</td></tr>';
-                    return;
-                }
-                users.forEach(u => {
-                    const tr = document.createElement('tr');
-                    const roleBadge = u.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-student">Student</span>';
-                    const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString() : '-';
-                    tr.innerHTML = `
-                        <td style="font-weight:600;">${u.username}</td>
-                        <td>${u.email}</td>
-                        <td>${roleBadge}</td>
-                        <td>Level ${u.detail_level}</td>
-                        <td>${u.language.toUpperCase()}</td>
-                        <td>${dateStr}</td>
-                        <td style="text-align: right; white-space: nowrap;">
-                            <button class="btn btn-primary btn-sm" onclick="openUserHistory('${u.user_id}')">History</button>
-                            ${u.is_admin ? '' : `<button class="btn btn-secondary btn-sm" onclick="openGift('${u.user_id}', '${esc(u.username)}')">+ Wildcards</button>`}
-                            <button class="btn btn-secondary btn-sm" onclick='openEditUserModal(${JSON.stringify(u)})'>Edit</button>
-                            <button class="btn btn-secondary btn-sm" onclick="openResetPasswordModal('${u.user_id}', '${u.username}')">Reset Key</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.user_id}', '${u.username}')">Delete</button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch(e) { console.error(e); }
-        }
-
-        function debounceUserSearch() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                const q = document.getElementById('user-search').value.trim();
-                fetchUsers(q);
-            }, 300);
         }
 
         /* SUPPORT TICKETS */
@@ -1439,6 +1473,8 @@
             register:             ['Signed up',        'account', 'badge-admin'],
             login:                ['Logged in',        'account', 'badge-student'],
             logout:               ['Logged out',       'account', 'badge-student'],
+            login_failed:         ['Login failed',     'account', 'badge-open'],
+            account_updated_by_admin: ['Changed by admin', 'account', 'badge-admin'],
             message_sent:         ['AI chat',          'chat',    'badge-admin'],
             app_open:             ['Opened the app',   'account', 'badge-student'],
             profile_updated:      ['Updated profile',  'account', 'badge-student'],
@@ -1492,6 +1528,15 @@
                 case 'password_changed': return 'Changed the password from the app.';
                 case 'password_reset_requested': return 'Asked support to reset the password (forgot password).<div class="log-sub">see User Support</div>';
                 case 'password_reset_by_admin': return `Admin <strong>${esc(d.by)}</strong> reset the password.`;
+                case 'login_failed': return `Sign-in failed (${esc(d.reason || 'wrong password')}).`;
+                case 'account_updated_by_admin': {
+                    if (d.created) return `Admin <strong>${esc(d.by)}</strong> created this account.`;
+                    const NAMES = { username: 'name', email: 'email', detail_level: 'level', language: 'language' };
+                    const parts = Object.entries(d.changes || {}).map(([k, v]) => k === 'is_admin'
+                        ? (v.to ? 'made administrator' : 'removed the administrator role')
+                        : `${NAMES[k] || esc(k)}: ${esc(v.from ?? '—')} → ${esc(v.to ?? '—')}`);
+                    return `Admin <strong>${esc(d.by)}</strong> changed the account: ${parts.join(', ') || 'no changes'}.`;
+                }
                 case 'message_sent': {
                     const how = d.fallback ? 'AI was offline, a fallback message was shown'
                         : d.cached ? `answered instantly from the cache (${ms(d.latency_ms)})`
@@ -1601,6 +1646,7 @@
                 if (log.action && (log.action.startsWith('ar_') || log.action.startsWith('wildcard'))) scheduleArRefresh();
                 if (log.action === 'wildcard_requested' || log.action === 'password_reset_requested') fetchTickets();
                 if (log.action && log.action.startsWith('quiz_')) scheduleQuizRefresh();
+                if (upUser && log.user_id === upUser.user_id) scheduleProfileRefresh();
             };
 
             ws.onclose = () => {
@@ -1641,11 +1687,14 @@
                 const [summary, levels, players] = await Promise.all([
                     arGet('/admin/ar/summary'), arGet('/admin/ar/levels'), arGet('/admin/ar/players?search=' + q)
                 ]);
-                renderArSummary(summary);
-                renderArLevels(levels);
                 arPlayers = players;
+                renderArSummary(summary, levels, players);
+                renderArLevels(levels);
                 renderArPlayers(players);
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error(e);
+                document.getElementById('ar-players-body').innerHTML = `<tr><td colspan="7" class="ac-empty">${qzLoadError(e, 'AR progress')}</td></tr>`;
+            }
         }
         function scheduleArRefresh() {
             clearTimeout(arTimer);
@@ -1656,38 +1705,36 @@
             arSearchTimer = setTimeout(fetchAr, 400);
         }
 
-        function renderArSummary(s) {
+        const AR_IDLE_DAYS = 7;
+        function arNeedsAttention(p) {      // started, not finished, and no AR play for a week
+            return !p.finished && p.last_played && (Date.now() - new Date(p.last_played).getTime()) > AR_IDLE_DAYS * 86400000;
+        }
+        function arPassRate(l) { return l.reached ? Math.round(100 * l.passed / l.reached) : null; }
+
+        function renderArSummary(s, levels, players) {
             document.getElementById('ar-players').textContent = s.players;
-            document.getElementById('ar-players-sub').textContent = `of ${s.students} learners`;
+            document.getElementById('ar-players-sub').textContent = `of ${s.students} learners · ${s.players_24h} in the last 24 h`;
             document.getElementById('ar-finished').textContent = s.finished_players;
-            document.getElementById('ar-passed').textContent = s.levels_passed;
-            document.getElementById('ar-skipped-sub').textContent = `${s.levels_skipped} skipped with a wildcard`;
-            document.getElementById('ar-sessions').textContent = s.sessions;
-            document.getElementById('ar-avg-sub').textContent = `avg ${fmtDuration(s.avg_session_seconds)} per session` + (s.sessions_3d ? ` · ${s.sessions_3d} in 3D mode (no AR)` : '');
-            document.getElementById('ar-playtime').textContent = fmtDuration(s.play_seconds);
-            document.getElementById('ar-24h-sub').textContent = `${s.players_24h} players in last 24h`;
-            document.getElementById('ar-parts').textContent = s.parts_discovered;
-            document.getElementById('ar-last-sub').textContent = 'last activity ' + fmtDate(s.last_activity);
-            document.getElementById('ar-wild').textContent = s.wildcards_used;
-            document.getElementById('ar-wild-sub').textContent = `${s.cards_spent} cards spent · ${s.power_jumps} power jumps`;
-            document.getElementById('ar-back').textContent = s.back_used;
-            document.getElementById('ar-given-sub').textContent = `wildcards given: ${s.admin_given} by admins · ${s.daily_given} daily gifts · ${s.earned} earned`;
+            document.getElementById('ar-finished-sub').textContent = s.players ? `${Math.round(100 * s.finished_players / s.players)}% of players built the whole helix` : 'built the whole double helix';
+            const rated = levels.filter(l => l.reached > 0).map(l => ({ ...l, rate: arPassRate(l) }));
+            const hardest = rated.sort((a, b) => a.rate - b.rate || b.skipped - a.skipped)[0];
+            document.getElementById('ar-hardest').textContent = hardest ? `Level ${hardest.level}` : '--';
+            document.getElementById('ar-hardest-sub').textContent = hardest
+                ? `${hardest.name} · ${hardest.rate}% pass on their own, ${hardest.skipped} skipped` : 'no level played yet';
+            document.getElementById('ar-attention').textContent = players.filter(arNeedsAttention).length;
         }
 
         function renderArLevels(levels) {
             const tbody = document.getElementById('ar-levels-body');
             tbody.innerHTML = levels.map(l => {
-                const rate = l.reached ? Math.round(100 * l.passed / l.reached) : 0;
+                const rate = arPassRate(l);
                 return `<tr>
-                    <td style="font-weight:700;">${l.level}</td>
-                    <td>${esc(l.name)}</td>
+                    <td style="font-weight:700;">${l.level} · ${esc(l.name)}</td>
                     <td>${l.reached}</td>
                     <td><span class="badge badge-resolved">${l.passed}</span></td>
-                    <td><span class="badge badge-in_progress">${l.skipped}</span></td>
-                    <td><div style="display:flex; gap:0.5rem; align-items:center;"><div class="bar"><span style="width:${rate}%"></span></div>${rate}%</div></td>
+                    <td>${l.skipped ? `<span class="badge badge-in_progress">${l.skipped}</span>` : '0'}</td>
+                    <td>${rate === null ? '<span class="ac-sub">not reached yet</span>' : `<div style="display:flex; gap:0.5rem; align-items:center;"><div class="bar"><span style="width:${rate}%"></span></div>${rate}%</div>`}</td>
                     <td>${fmtDuration(l.avg_seconds)}</td>
-                    <td>${fmtDuration(l.best_seconds)}</td>
-                    <td>${l.parts_discovered}</td>
                 </tr>`;
             }).join('');
         }
@@ -1704,25 +1751,30 @@
 
         function renderArPlayers(players) {
             const tbody = document.getElementById('ar-players-body');
-            if (!players.length) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:2rem;">No AR activity yet. Learners appear here after they open "Explore DNA in AR" in the app. To give wildcards before that, use "+ Wildcards" in Users &amp; Accounts.</td></tr>';
+            const f = document.getElementById('ar-filter').value;
+            const shown = players.filter(p => f === 'all' || (f === 'attention' && arNeedsAttention(p))
+                || (f === 'progress' && !p.finished) || (f === 'finished' && p.finished));
+            if (!shown.length) {
+                tbody.innerHTML = `<tr><td colspan="7" class="ac-empty">${players.length ? 'No learners in this group.'
+                    : 'No AR activity yet. Learners appear here after they open "Explore DNA in AR" in the app.'}</td></tr>`;
                 return;
             }
-            tbody.innerHTML = players.map((p, i) => `<tr>
-                <td style="font-weight:600;">${esc(p.username)}${p.played_3d ? ' <span class="badge badge-in_progress" title="Played on a phone without AR (3D mode)">3D</span>' : ''}</td>
-                <td style="white-space:nowrap;">${levelPills(p)}</td>
-                <td>${p.current_level ? esc(p.current_level + ' · ' + p.current_level_name) : '--'}</td>
-                <td>${p.finished ? '<span class="badge badge-resolved">Finished</span><div style="font-size:0.7rem; color:var(--text-muted);">' + fmtDate(p.finished_at) + '</div>' : '<span class="badge badge-student">In progress</span>'}</td>
-                <td>${p.sessions}</td>
-                <td>${fmtDuration(p.play_seconds)}</td>
-                <td>${p.parts_discovered}</td>
-                <td style="white-space:nowrap;" title="${p.wildcards_used} used (${p.power_jumps} power jumps) · ${p.admin_given} given by admins · ${p.daily_given} daily gifts · ${p.earned} earned">${p.wallet_total ?? '--'} in hand<div style="font-size:0.7rem; color:var(--text-muted);">${p.wallet_total !== null ? p.wallet_gift + ' gift + ' + p.wallet_default + ' default · ' : ''}${p.wildcards_used} used</div></td>
-                <td>${p.back_used}</td>
-                <td style="white-space:nowrap; font-size:0.8rem;">${fmtDate(p.last_played)}</td>
-                <td style="text-align:right; white-space:nowrap;"><button class="btn btn-secondary btn-sm" onclick="showArPlayer(${i})">Timeline</button>
-                    <button class="btn btn-secondary btn-sm" onclick="openUserHistory('${esc(p.user_id)}')">History</button>
-                    <button class="btn btn-primary btn-sm" onclick="openArGift(${i})" title="Give wildcards">+ Wildcards</button></td>
-            </tr>`).join('');
+            tbody.innerHTML = shown.map(p => {
+                const i = players.indexOf(p);
+                const status = p.finished
+                    ? `<span class="badge badge-resolved">Finished</span><div class="ac-sub">${fmtDate(p.finished_at)}</div>`
+                    : arNeedsAttention(p) ? `<span class="badge badge-open">No play for ${AR_IDLE_DAYS}+ days</span>`
+                    : '<span class="badge badge-student">In progress</span>';
+                return `<tr>
+                    <td><a href="#" class="name-link" onclick="openUserProfile('${esc(p.user_id)}'); return false;">${esc(p.username)}</a>${p.played_3d ? ' <span class="badge badge-low" title="Plays on a phone without AR (3D mode)">3D</span>' : ''}</td>
+                    <td style="white-space:nowrap;">${levelPills(p)}</td>
+                    <td>${p.finished ? '—' : p.current_level ? esc(p.current_level + ' · ' + p.current_level_name) : '--'}</td>
+                    <td>${status}</td>
+                    <td>${fmtDuration(p.play_seconds)}<div class="ac-sub">${p.sessions} session${p.sessions === 1 ? '' : 's'}</div></td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${fmtDate(p.last_played)}</td>
+                    <td style="text-align:right;"><button class="btn btn-secondary btn-sm" onclick="showArPlayer(${i})">Timeline</button></td>
+                </tr>`;
+            }).join('');
         }
 
         async function showArPlayer(index) {
@@ -1730,15 +1782,8 @@
             if (!p) return;
             document.getElementById('ar-player-title').textContent = 'AR timeline · ' + p.username;
             document.getElementById('ar-player-summary').innerHTML =
-                `Passed: ${p.passed_levels.join(', ') || 'none'} · Skipped: ${p.skipped_levels.join(', ') || 'none'} · ` +
-                `Sessions: ${p.sessions} · Play time: ${fmtDuration(p.play_seconds)} · First played: ${fmtDate(p.first_played)}<br>` +
-                (p.wallet_total !== null
-                    ? `Wildcards in hand: <strong>${p.wallet_total}</strong> = ${p.wallet_gift} gift + ${p.wallet_default} default` +
-                      (p.next_daily_gift ? ` · next daily gift ${fmtDate(p.next_daily_gift)}` : '') + '<br>'
-                    : 'No wildcard wallet yet<br>') +
-                `Received: ${p.daily_given} daily gift · ${p.admin_given} from admins · ${p.earned} earned · ` +
-                `Spent: ${cards(p.cards_spent)} (${p.spent_gift} gift + ${p.spent_default} default) on ${p.wildcards_used} wildcards, ${p.power_jumps} power jumps · ` +
-                `Back button: ${p.back_used}×`;
+                `Passed: ${p.passed_levels.join(', ') || 'none'} · Skipped with a wildcard: ${p.skipped_levels.join(', ') || 'none'} · ` +
+                `${p.sessions} sessions · ${fmtDuration(p.play_seconds)} played · first played ${fmtDate(p.first_played)}`;
             const tbody = document.getElementById('ar-player-events');
             tbody.innerHTML = '<tr><td colspan="3">Loading…</td></tr>';
             document.getElementById('ar-player-modal').style.display = 'flex';
@@ -1756,19 +1801,16 @@
         }
 
         function exportArCsv() {
-            const head = ['username', 'user_id', 'played_3d', 'passed_levels', 'skipped_levels', 'current_level', 'finished', 'finished_at',
-                          'sessions', 'play_seconds', 'parts_discovered', 'wallet_total', 'wallet_gift', 'wallet_default',
-                          'wildcards_used', 'power_jumps', 'cards_spent', 'spent_gift', 'spent_default', 'admin_given', 'daily_given', 'earned',
-                          'back_used', 'first_played', 'last_played'];
+            const head = ['username', 'user_id', 'passed_levels', 'skipped_levels', 'current_level', 'finished', 'finished_at',
+                          'sessions', 'play_seconds', 'played_3d', 'first_played', 'last_played', 'needs_attention'];
             const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-            const rows = arPlayers.map(p => [p.username, p.user_id, p.played_3d, p.passed_levels.join(' '), p.skipped_levels.join(' '),
-                p.current_level, p.finished, p.finished_at, p.sessions, p.play_seconds, p.parts_discovered, p.wallet_total, p.wallet_gift,
-                p.wallet_default, p.wildcards_used, p.power_jumps, p.cards_spent, p.spent_gift, p.spent_default, p.admin_given, p.daily_given,
-                p.earned, p.back_used, p.first_played, p.last_played]);
+            const rows = arPlayers.map(p => [p.username, p.user_id, p.passed_levels.join(' '), p.skipped_levels.join(' '),
+                p.current_level, p.finished, p.finished_at, p.sessions, p.play_seconds, p.played_3d, p.first_played, p.last_played,
+                arNeedsAttention(p)]);
             const csv = [head, ...rows].map(r => r.map(cell).join(',')).join('\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
-            a.download = 'eidovia-ar-players-' + new Date().toISOString().slice(0, 10) + '.csv';
+            a.download = 'eidovia-ar-progress-' + new Date().toISOString().slice(0, 10) + '.csv';
             a.click();
             URL.revokeObjectURL(a.href);
         }
@@ -1780,7 +1822,7 @@
             if (p) openGift(p.user_id, p.username);
         }
         async function openGift(userId, username) {
-            giftTarget = { user_id: userId, username };
+            giftTarget = { user_id: userId, username, key: newKey() };
             document.getElementById('ar-gift-amount').value = 1;
             const sub = document.getElementById('ar-gift-subtitle');
             sub.textContent = `For ${username}`;
@@ -1803,7 +1845,7 @@
                 const res = await fetch('/admin/ar/players/' + encodeURIComponent(p.user_id) + '/wildcards', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
-                    body: JSON.stringify({ amount })
+                    body: JSON.stringify({ amount, request_key: p.key })
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
@@ -1814,9 +1856,10 @@
                 }
                 const r = await res.json().catch(() => null);
                 closeModal('ar-gift-modal');
-                if (r) alert(`Gave ${r.amount} wildcard${r.amount === 1 ? '' : 's'} to ${r.username}. They now have ${r.total} (${r.gift} gift + ${r.default} default).`);
+                if (r) notify(r.duplicate ? 'This grant was already saved (duplicate submission ignored).'
+                                          : `Gave ${r.amount} wildcard${r.amount === 1 ? '' : 's'} to ${r.username}. They now have ${r.total} (${r.gift} gift + ${r.default} default).`);
                 fetchAr();
-                if (uhUserId === p.user_id && document.getElementById('user-history-modal').style.display === 'flex') openUserHistory(p.user_id);
+                refreshProfileIf(p.user_id); fetchUserList();
             } catch(e) { alert(e.message); }
             finally { btn.disabled = false; }
         }
@@ -1918,109 +1961,327 @@
             tr.after(more);
         }
 
-        /* USER HISTORY (support) */
-        let uhUserId = null, uhUsername = '', uhDetail = [], uhDetailLoaded = false;
+        /* USERS, USER PROFILE, ADMINISTRATORS */
+        let usersPage = 1, upUser = null, upTab = 'overview', upActPage = 1, upActRows = [], upGrantKey = null;
+        let adminRows = [], upRefreshTimer = null, editOriginal = null;
         function hist(k, v, s = '') { return `<div class="hist"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`; }
-        async function openUserHistory(userId) {
-            uhUserId = userId; uhDetail = []; uhDetailLoaded = false;
-            document.getElementById('uh-title').textContent = 'User history';
-            document.getElementById('uh-sub').textContent = '';
-            document.getElementById('uh-summary').innerHTML = '<div style="color:var(--text-muted);">Loading…</div>';
-            document.getElementById('uh-detail-wrap').style.display = 'none';
-            document.getElementById('uh-detail').innerHTML = '';
-            document.getElementById('user-history-modal').style.display = 'flex';
+        const LEVEL_NAMES = {1: 'Beginner', 2: 'Intermediate', 3: 'Advanced'};
+        const LEDGER_REASONS = { admin_grant: 'Given by an admin', daily_gift: 'Daily gift', quiz_force: 'DNA quiz Force Attempt',
+            ar_skip: 'AR game: skipped a level', ar_jump: 'AR game: power jump', ar_level_passed: 'AR game: level passed' };
+        function newKey() { return 'g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+        function myAdminId() {
+            try { return JSON.parse(atob(jwtToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub; } catch(e) { return null; }
+        }
+        async function apiSend(method, path, body) {
+            const res = await fetch(path, { method, headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken},
+                                            body: body === undefined ? undefined : JSON.stringify(body) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : data.detail ? JSON.stringify(data.detail) : `HTTP ${res.status}`);
+            return data;
+        }
+        function notify(message, ok = true) {
+            let box = document.getElementById('ac-toast');
+            if (!box) { box = document.createElement('div'); box.id = 'ac-toast'; document.body.appendChild(box); }
+            box.className = 'ac-toast ' + (ok ? 'ok' : 'err');
+            box.textContent = message;
+            box.style.display = 'block';
+            clearTimeout(box._t);
+            box._t = setTimeout(() => { box.style.display = 'none'; }, ok ? 4000 : 8000);
+        }
+        function showTab(tabId, sidebarTab) {
+            document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.sidebar-item').forEach(el =>
+                el.classList.toggle('active', el.getAttribute('onclick') === `navigate('${sidebarTab}')`));
+            document.getElementById('page-title').textContent = tabId === 'tab-user-profile' ? 'User Profile' : (sidebarTab === 'tab-admins' ? 'Administrators' : 'Users');
+        }
+        function onlineText(u) {
+            return u.online ? `<span class="dot ${u.active_now ? 'dot-on' : 'dot-idle'}"></span>${u.active_now ? 'Active now' : 'Logged in'}`
+                            : '<span style="color:var(--text-muted);">Offline</span>';
+        }
+        function fetchUsers() { return fetchAccounts(); }          // older callers (dashboard load, create/edit/delete)
+        async function fetchAccounts() { await Promise.all([fetchUserList(), fetchAdminList()]); }
+        function debounceUserSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => fetchUserList(1), 300); }
+
+        async function fetchUserList(page) {
+            if (page) usersPage = page;
+            const tbody = document.getElementById('users-table-body');
             try {
-                const u = await arGet('/admin/users/' + encodeURIComponent(userId) + '/log-summary');
-                document.getElementById('uh-title').textContent = 'User history · ' + u.username;
-                uhUsername = u.username;
-                document.getElementById('uh-gift').style.display = u.is_admin ? 'none' : '';
-                const LEVELS = {1: 'Beginner', 2: 'Intermediate', 3: 'Advanced'};
-                document.getElementById('uh-sub').innerHTML = `${esc(u.email)} · ${u.is_admin ? 'Admin' : 'Learner'} · ${LEVELS[u.level] || 'Level ' + u.level}` +
-                    (u.age ? ` · age ${u.age}` : '') + (u.gender ? ` · ${esc(u.gender.replace(/_/g, ' '))}` : '') +
-                    ` · user id <span class="mono">${esc(u.user_id)}</span>`;
-                const status = u.logged_in_now
-                    ? `<span class="dot ${u.active_now ? 'dot-on' : 'dot-idle'}"></span>${u.active_now ? 'Active now' : 'Logged in'}`
-                    : 'Logged out';
-                const w = u.wallet;
-                document.getElementById('uh-summary').innerHTML = `
-                    <div class="hist-grid">
-                        ${hist('Status', status, u.last_seen ? 'last seen ' + ago(u.last_seen) : '')}
-                        ${hist('Signed up', fmtDate(u.signed_up_at))}
-                        ${hist('Last login', fmtDate(u.last_login), `${u.logins} logins in total`)}
-                        ${hist('Last logout', fmtDate(u.last_logout), `${u.logouts} logouts in total`)}
-                        ${hist('Times used the app', u.app_opens, `${u.active_days} active days`)}
-                        ${hist('AI questions', u.questions, `${u.questions_cached} from cache · ${u.questions_failed} while AI offline`)}
-                        ${hist('Last question', fmtDate(u.last_question))}
-                        ${hist('AR sessions', u.ar_sessions, `${fmtDuration(u.ar_seconds)} played · last ${fmtDate(u.last_ar)}`)}
-                        ${hist('Levels passed', u.levels_passed, `${u.journeys} journeys finished`)}
-                        ${hist('Wildcards', w ? w.total : '--', (w ? `${w.gift} gift + ${w.default} default · ` : 'no wallet yet · ') + `${u.wildcards_used} used · ${u.wildcard_requests} requests`)}
-                        ${hist('Back button', u.back_used + '×')}
-                        ${hist('Support tickets', u.tickets, `${u.tickets_open} open`)}
-                        ${hist('First activity', fmtDate(u.first_activity))}
-                        ${hist('Last activity', fmtDate(u.last_activity))}
-                    </div>
-                    <div style="font-size:0.8rem; font-weight:600;">IP addresses${u.current_ip ? ` <span style="font-weight:400; color:var(--text-muted);">(now: <span class="mono">${esc(u.current_ip)}</span>)</span>` : ''}</div>
-                    <div class="chips">${u.ips.map(x => `<span class="chip mono" title="last ${esc(fmtDate(x.last))}">${esc(x.ip)} · ${x.count}×</span>`).join('') || '<span class="chip">none recorded yet</span>'}</div>
-                    <div style="font-size:0.8rem; font-weight:600;">Devices</div>
-                    <div class="chips">${u.devices.map(x => `<span class="chip" title="last ${esc(fmtDate(x.last))}">${esc(x.device)} · ${x.count}×</span>`).join('') || '<span class="chip">none recorded yet</span>'}</div>`;
-            } catch(e) { document.getElementById('uh-summary').innerHTML = `<div style="color:#b91c1c;">${esc(e.message)}</div>`; }
+                const search = document.getElementById('user-search').value.trim();
+                const data = await arGet('/admin/accounts/users?' + new URLSearchParams({ q: search, page: usersPage, page_size: 20 }));
+                tbody.innerHTML = data.items.map(u => `<tr>
+                    <td><a href="#" class="name-link" onclick="openUserProfile('${esc(u.user_id)}'); return false;">${esc(u.username)}</a></td>
+                    <td>${esc(u.email || '—')}</td>
+                    <td style="white-space:nowrap;">${onlineText(u)}</td>
+                    <td>${esc(LEVEL_NAMES[u.level] || 'Level ' + u.level)}</td>
+                    <td>${u.age ?? '—'}</td>
+                    <td>${esc(u.gender ? u.gender.replace(/_/g, ' ') : '—')}</td>
+                    <td>${u.wildcards ?? '<span class="ac-sub">no wallet yet</span>'}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${u.last_login ? tz(u.last_login) : '<span class="ac-sub">never</span>'}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${tz(u.registered_at)}</td>
+                </tr>`).join('') || `<tr><td colspan="9" class="ac-empty">${search ? 'No users match this search.' : 'No users registered yet.'}</td></tr>`;
+                qzPager('users-pager', data, 'fetchUserList');
+            } catch(e) { tbody.innerHTML = `<tr><td colspan="9" class="ac-empty">${qzLoadError(e, 'users')}</td></tr>`; }
         }
-        function detailCategory(item) {
-            if (item.source === 'request') return 'request';
-            return (LOG_TYPES[item.action] || [null, 'other'])[1];
+
+        async function fetchAdminList() {
+            const tbody = document.getElementById('admins-table-body');
+            try {
+                const data = await arGet('/admin/accounts/admins?page_size=100');
+                adminRows = data.items;
+                document.getElementById('admins-count').textContent = `${data.total} account${data.total === 1 ? '' : 's'}`;
+                tbody.innerHTML = data.items.map((a, i) => `<tr>
+                    <td style="font-weight:600;">${esc(a.username)}${a.is_you ? ' <span class="badge badge-low">you</span>' : ''}</td>
+                    <td>${esc(a.email || '—')}</td>
+                    <td><span class="badge badge-admin">${esc(a.role)}</span></td>
+                    <td style="white-space:nowrap;">${onlineText(a)}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${a.last_login ? tz(a.last_login) : '<span class="ac-sub">never</span>'}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${tz(a.registered_at)}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="adminAction(${i}, 'edit')">Edit</button>
+                        <button class="btn btn-secondary btn-sm" onclick="adminAction(${i}, 'password')">Reset password</button>
+                        ${a.is_you ? '' : `<button class="btn btn-secondary btn-sm" onclick="adminAction(${i}, 'revoke')">Remove admin role</button>
+                        <button class="btn btn-danger btn-sm" onclick="adminAction(${i}, 'delete')">Delete</button>`}
+                    </td>
+                </tr>`).join('') || '<tr><td colspan="7" class="ac-empty">No administrator accounts.</td></tr>';
+            } catch(e) { tbody.innerHTML = `<tr><td colspan="7" class="ac-empty">${qzLoadError(e, 'administrators')}</td></tr>`; }
         }
-        function detailRow(item) {
-            const d = item.details || {};
-            if (item.source === 'request') {
-                return `<tr data-cat="request">
-                    <td style="white-space:nowrap; font-size:0.78rem;">${fmtDate(item.created_at)}</td>
-                    <td><span class="badge badge-low">Request</span></td>
-                    <td>${requestText(d)} → ${esc(d.upstream)} · ${statusText(d.status)} · ${ms(d.ms)}${d.detail ? '<div class="log-sub">' + esc(d.detail) + '</div>' : ''}${d.error ? '<div class="log-sub" style="color:#b91c1c;">' + esc(d.error) + '</div>' : ''}</td>
-                    <td style="font-size:0.78rem;"><span class="mono">${esc(d.ip || '--')}</span><div style="color:var(--text-muted);">${esc(d.device || '')}</div></td>
-                </tr>`;
+        async function adminAction(i, what) {
+            const a = adminRows[i];
+            if (!a) return;
+            if (what === 'edit') return openEditUserModal({ user_id: a.user_id, username: a.username, email: a.email, language: a.language,
+                                                            detail_level: a.level, is_admin: true });
+            if (what === 'password') return openResetPasswordModal(a.user_id, a.username);
+            if (what === 'delete') return deleteUser(a.user_id, a.username, true);
+            if (what === 'revoke') {
+                if (!confirm(`Remove the administrator role from "${a.username}"?\n\nThey become a regular app user and can no longer sign in to the Admin Center.`)) return;
+                try {
+                    await apiSend('PATCH', `/admin/users/${a.user_id}`, { is_admin: false });
+                    notify(`${a.username} is now a regular user (moved to Users).`);
+                    fetchAccounts(); fetchStats();
+                } catch(e) { notify('Could not change the role: ' + e.message, false); }
             }
-            const [label, cat, badge] = LOG_TYPES[item.action] || [item.action, 'other', 'badge-student'];
-            return `<tr data-cat="${cat}">
-                <td style="white-space:nowrap; font-size:0.78rem;">${fmtDate(item.created_at)}</td>
-                <td><span class="badge ${badge}">${esc(label)}</span></td>
-                <td style="font-size:0.85rem;">${describeLog(item)}</td>
-                <td style="font-size:0.78rem;"><span class="mono">${esc(d.ip || '--')}</span><div style="color:var(--text-muted);">${esc(d.device || '')}</div></td>
-            </tr>`;
         }
-        async function loadUserDetailLog() {
-            if (!uhUserId) return;
-            const wrap = document.getElementById('uh-detail-wrap');
-            const tbody = document.getElementById('uh-detail');
-            wrap.style.display = 'block';
-            tbody.innerHTML = '<tr><td colspan="4">Loading…</td></tr>';
+
+        /* ---------- user profile ---------- */
+        function openUserHistory(userId) { return openUserProfile(userId); }   // links from AR game, support, technical tabs
+        function backToUsers() { upUser = null; showTab('tab-users', 'tab-users'); fetchUserList(); }
+        function refreshProfileIf(userId) {
+            if (upUser && upUser.user_id === userId && document.getElementById('tab-user-profile').classList.contains('active')) openUserProfile(userId, true);
+        }
+        function scheduleProfileRefresh() { clearTimeout(upRefreshTimer); upRefreshTimer = setTimeout(() => upUser && openUserProfile(upUser.user_id, true), 1500); }
+
+        async function openUserProfile(userId, keepTab = false) {
+            if (!keepTab) { upTab = 'overview'; upActPage = 1; resetActivityFilters(true); }
+            upGrantKey = newKey();
+            showTab('tab-user-profile', 'tab-users');
+            const head = document.getElementById('up-head');
+            if (!keepTab) {
+                head.innerHTML = '<div class="ac-empty">Loading…</div>';
+                document.getElementById('up-pane-overview').innerHTML = '';
+                document.getElementById('up-pane-actions').innerHTML = '';
+            }
             try {
-                const withReq = document.getElementById('uh-requests').checked;
-                uhDetail = await arGet('/admin/users/' + encodeURIComponent(uhUserId) + '/activity?limit=1000&requests=' + withReq);
-                uhDetailLoaded = true;
-                tbody.innerHTML = uhDetail.map(detailRow).join('') || '<tr><td colspan="4">Nothing recorded for this user yet.</td></tr>';
-                filterUserDetailLog();
-            } catch(e) { tbody.innerHTML = `<tr><td colspan="4">${esc(e.message)}</td></tr>`; }
+                const u = await arGet('/admin/accounts/users/' + encodeURIComponent(userId));
+                upUser = u;
+                renderProfileHead(u);
+                renderOverview(u);
+                renderActions(u);
+                upSelectTab(upTab);
+            } catch(e) {
+                upUser = null;
+                head.innerHTML = / 409$/.test(e.message)
+                    ? `<div class="ac-empty">This is an administrator account. <a href="#" onclick="showTab('tab-admins', 'tab-admins'); fetchAdminList(); return false;">Open Administrators</a></div>`
+                    : / 404$/.test(e.message) ? '<div class="ac-empty">This user no longer exists.</div>' : `<div class="ac-empty">${qzLoadError(e, 'this user')}</div>`;
+                document.getElementById('up-pane-overview').innerHTML = '';
+            }
         }
-        function filterUserDetailLog() {
-            const f = document.getElementById('uh-filter').value;
-            document.querySelectorAll('#uh-detail tr[data-cat]').forEach(tr => {
-                tr.style.display = (f === 'all' || tr.dataset.cat === f) ? '' : 'none';
-            });
+        function renderProfileHead(u) {
+            const w = u.wallet;
+            document.getElementById('up-head').innerHTML = `
+                <div>
+                    <h2 style="font-size:1.35rem; font-weight:800;">${esc(u.username)}</h2>
+                    <div class="ac-sub" style="margin-top:0.2rem;">${esc(u.email || 'no email')} · ${esc(LEVEL_NAMES[u.level] || 'Level ' + u.level)} · user id <span class="mono">${esc(u.user_id)}</span></div>
+                    <div style="margin-top:0.5rem; font-size:0.85rem;">${u.logged_in_now ? `<span class="dot ${u.active_now ? 'dot-on' : 'dot-idle'}"></span>${u.active_now ? 'Active now' : 'Logged in'}` : 'Offline'}
+                        ${u.last_seen ? `<span class="ac-sub"> · last seen ${esc(ago(u.last_seen))}</span>` : ''}</div>
+                </div>
+                <div class="up-head-wallet" onclick="upSelectTab('wildcards')" title="Wildcard management">
+                    <div class="hist-k">Wildcards</div>
+                    <div class="up-balance" id="up-head-total">${w ? w.total : '—'}</div>
+                    <div class="ac-sub">${w ? `${w.gift} gift + ${w.default} default` : 'no wallet yet'}</div>
+                </div>`;
         }
-        function exportUserDetailLog() {
-            if (!uhDetail.length) { alert('Load the detail log first.'); return; }
+        function renderOverview(u) {
+            const h = u.history || {};
+            const quiz = u.quiz;
+            document.getElementById('up-pane-overview').innerHTML = `
+                <div class="card"><div class="card-header"><h3>Basic information</h3></div><div class="up-body"><div class="hist-grid">
+                    ${hist('Name', esc(u.username))}
+                    ${hist('Email', esc(u.email || '—'))}
+                    ${hist('Age', u.age ?? '—')}
+                    ${hist('Gender', esc(u.gender ? u.gender.replace(/_/g, ' ') : '—'))}
+                    ${hist('Learning level', esc(LEVEL_NAMES[u.level] || 'Level ' + u.level))}
+                    ${hist('Role', 'User', 'regular app account')}
+                    ${hist('Status', u.logged_in_now ? (u.active_now ? 'Active now' : 'Logged in') : 'Offline', u.last_seen ? 'last seen ' + esc(ago(u.last_seen)) : '')}
+                    ${hist('Registered', tz(u.signed_up_at))}
+                    ${hist('Last login', u.last_login ? tz(u.last_login) : 'never', `${u.logins} logins in total`)}
+                    ${hist('Last logout', u.last_logout ? tz(u.last_logout) : '—', `${u.logouts} logouts in total`)}
+                </div></div></div>
+                <div class="card"><div class="card-header"><h3>Usage</h3></div><div class="up-body"><div class="hist-grid">
+                    ${hist('Times used the app', u.app_opens, `${u.active_days} active days`)}
+                    ${hist('AI questions', u.questions, `${u.questions_cached} from cache · ${u.questions_failed} while AI offline`)}
+                    ${hist('AR sessions', u.ar_sessions, `${fmtDuration(u.ar_seconds)} played`)}
+                    ${hist('AR levels passed', u.levels_passed, `${u.journeys} journeys finished`)}
+                    ${hist('DNA quiz', quiz ? `${quiz.completed} completed` : 'not taken', quiz ? `latest ${quiz.latest_score ?? '--'}/${quiz.latest_total ?? '--'} · best ${qzPct(quiz.best_percent)} · avg ${qzPct(quiz.avg_percent)}` : '')}
+                    ${hist('Wildcards used', u.wildcards_used, `${u.wildcard_requests} requests to admins`)}
+                    ${hist('Support tickets', u.tickets, `${u.tickets_open} open`)}
+                    ${hist('Last activity', u.last_activity ? tz(u.last_activity) : '—')}
+                </div></div></div>
+                <div class="card"><div class="card-header"><h3>Where from</h3></div><div class="up-body">
+                    <div class="hist-k">IP addresses${u.current_ip ? ` <span style="text-transform:none; font-weight:400;">(now: <span class="mono">${esc(u.current_ip)}</span>)</span>` : ''}</div>
+                    <div class="chips">${u.ips.map(x => `<a href="#" class="chip mono" title="last ${esc(tz(x.last))}" onclick="filterActivityByIp('${esc(x.ip)}'); return false;">${esc(x.ip)} · ${x.count}×</a>`).join('') || '<span class="chip">none recorded</span>'}</div>
+                    <div class="hist-k">Devices</div>
+                    <div class="chips">${u.devices.map(x => `<span class="chip" title="last ${esc(tz(x.last))}">${esc(x.device)} · ${x.count}×</span>`).join('') || '<span class="chip">none recorded</span>'}</div>
+                    <div class="ac-sub">${historyNote(h)}</div>
+                </div></div>`;
+        }
+        function historyNote(h) {
+            if (!h.events) return 'No activity has been recorded for this user yet.';
+            return `${h.events} recorded events since ${tz(h.first_event)}.` +
+                (h.first_ip ? ` IP addresses and devices are recorded since ${tz(h.first_ip)}; earlier events have none.` : ' No IP addresses were recorded for these events.') +
+                ' Activity before the first event was not recorded.';
+        }
+        function upSelectTab(tab) {
+            upTab = tab;
+            document.querySelectorAll('.up-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+            document.querySelectorAll('.up-pane').forEach(p => p.classList.toggle('active', p.id === 'up-pane-' + tab));
+            if (!upUser) return;
+            if (tab === 'wildcards') loadUserWildcards();
+            if (tab === 'activity') loadUserActivity();
+        }
+
+        /* ---------- wildcard management ---------- */
+        async function loadUserWildcards() {
+            if (!upUser) return;
+            const body = document.getElementById('upw-body');
+            body.innerHTML = '<tr><td colspan="5" class="ac-empty">Loading…</td></tr>';
+            try {
+                const d = await arGet('/admin/accounts/users/' + encodeURIComponent(upUser.user_id) + '/wildcards');
+                const w = d.wallet;
+                document.getElementById('upw-total').textContent = w ? w.total : '—';
+                document.getElementById('upw-split').textContent = w ? `${w.gift} gift + ${w.default} default · gift +2 every 24 h (max 6)` : 'No wallet yet: it is created with 3 cards the first time the user opens the app.';
+                const headTotal = document.getElementById('up-head-total');
+                if (headTotal) headTotal.textContent = w ? w.total : '—';
+                document.getElementById('upw-since').textContent = d.ledger_since ? `recorded since ${tz(d.ledger_since)}; earlier changes are in Activity logs` : '';
+                body.innerHTML = d.entries.map(e => `<tr>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${tz(e.created_at)}</td>
+                    <td style="font-weight:700; color:${e.delta > 0 ? '#15803d' : '#b91c1c'};">${e.delta > 0 ? '+' : ''}${e.delta}</td>
+                    <td>${esc(LEDGER_REASONS[e.reason] || e.reason.replace(/_/g, ' '))}</td>
+                    <td>${e.total_after ?? '—'}</td>
+                    <td>${e.by ? `<strong>${esc(e.by)}</strong>` : '<span class="ac-sub">—</span>'}</td>
+                </tr>`).join('') || '<tr><td colspan="5" class="ac-empty">No wildcard changes recorded yet.</td></tr>';
+            } catch(e) { body.innerHTML = `<tr><td colspan="5" class="ac-empty">${qzLoadError(e, 'wildcards')}</td></tr>`; }
+        }
+        async function submitProfileGrant() {
+            if (!upUser) return;
+            const input = document.getElementById('upw-amount');
+            const amount = Number(input.value);
+            if (!Number.isInteger(amount) || amount < 1 || amount > 10) { notify('Enter a whole number from 1 to 10.', false); input.focus(); return; }
+            if (!confirm(`Give ${amount} wildcard${amount === 1 ? '' : 's'} to ${upUser.username}?`)) return;
+            const btn = document.getElementById('upw-give');
+            btn.disabled = true;
+            try {
+                const r = await apiSend('POST', '/admin/ar/players/' + encodeURIComponent(upUser.user_id) + '/wildcards', { amount, request_key: upGrantKey });
+                upGrantKey = newKey();           // next "Give" is a new grant; a retry of this one was answered once
+                notify(r.duplicate ? 'This grant was already saved (duplicate submission ignored).'
+                                   : `Gave ${amount} wildcard${amount === 1 ? '' : 's'} to ${r.username}. New balance: ${r.total}.`);
+                input.value = 1;
+                loadUserWildcards(); fetchUserList(); fetchAr();
+            } catch(e) { notify('Could not give wildcards: ' + e.message, false); }   // same key: retrying cannot give twice
+            finally { btn.disabled = false; }
+        }
+
+        /* ---------- activity logs ---------- */
+        function resetActivityFilters(silent) {
+            ['ual-from', 'ual-to', 'ual-ip', 'ual-q'].forEach(id => { document.getElementById(id).value = ''; });
+            document.getElementById('ual-type').value = '';
+            document.getElementById('ual-status').value = '';
+            if (!silent) loadUserActivity(1);
+        }
+        function filterActivityByIp(ip) {
+            resetActivityFilters(true);
+            document.getElementById('ual-ip').value = ip;
+            upActPage = 1;
+            upSelectTab('activity');
+        }
+        async function loadUserActivity(page) {
+            if (!upUser) return;
+            if (page) upActPage = page;
+            const body = document.getElementById('ual-body');
+            body.innerHTML = '<tr><td colspan="7" class="ac-empty">Loading…</td></tr>';
+            document.getElementById('ual-note').textContent = historyNote(upUser.history || {});
+            try {
+                const q = new URLSearchParams({ page: upActPage, page_size: 50, date_from: qzDay('ual-from'), date_to: qzDay('ual-to', true),
+                    category: document.getElementById('ual-type').value, status: document.getElementById('ual-status').value,
+                    ip: document.getElementById('ual-ip').value.trim(), q: document.getElementById('ual-q').value.trim() });
+                const d = await arGet('/admin/accounts/users/' + encodeURIComponent(upUser.user_id) + '/activity?' + q);
+                upActRows = d.items;
+                body.innerHTML = d.items.map(it => {
+                    const [label, , badge] = LOG_TYPES[it.action] || [it.action, 'other', 'badge-student'];
+                    return `<tr>
+                        <td style="white-space:nowrap; font-size:0.8rem;">${tz(it.created_at)}</td>
+                        <td><span class="badge ${badge}">${esc(label)}</span></td>
+                        <td style="font-size:0.85rem; min-width:260px;">${describeLog({ action: it.action, details: it.details })}
+                            <details class="log-raw"><summary>details</summary><pre>${esc(JSON.stringify(it.details, null, 2))}</pre></details></td>
+                        <td class="mono">${it.ip ? `<a href="#" onclick="filterActivityByIp('${esc(it.ip)}'); return false;">${esc(it.ip)}</a>` : '<span class="ac-sub">not recorded</span>'}</td>
+                        <td style="font-size:0.78rem; max-width:200px;">${esc(it.device || '—')}</td>
+                        <td>${it.status === 'failed' ? '<span class="badge badge-open">Failed</span>' : '<span class="badge badge-resolved">Succeeded</span>'}</td>
+                        <td>${it.by ? `<strong>${esc(it.by)}</strong>` : '<span class="ac-sub">—</span>'}</td>
+                    </tr>`;
+                }).join('') || '<tr><td colspan="7" class="ac-empty">No activity matches these filters.</td></tr>';
+                qzPager('ual-pager', d, 'loadUserActivity');
+            } catch(e) { body.innerHTML = `<tr><td colspan="7" class="ac-empty">${qzLoadError(e, 'the activity log')}</td></tr>`; }
+        }
+        function exportUserActivity() {
+            if (!upActRows.length) { notify('Nothing to export on this page.', false); return; }
             const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-            const rows = uhDetail.map(i => {
-                const d = i.details || {};
-                const what = i.source === 'request' ? `${d.method} ${d.path} -> ${d.upstream} ${d.status} ${d.ms}ms` : JSON.stringify(d);
-                return [i.created_at, i.source, i.action, what, d.ip, d.device];
-            });
-            const csv = [['when', 'source', 'action', 'details', 'ip', 'device'], ...rows].map(r => r.map(cell).join(',')).join('\n');
+            const rows = upActRows.map(i => [i.created_at, i.action, i.category, i.status, i.ip, i.device, i.by, JSON.stringify(i.details)]);
+            const csv = [['when', 'action', 'type', 'status', 'ip', 'device', 'administrator', 'details'], ...rows].map(r => r.map(cell).join(',')).join('\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
-            a.download = 'eidovia-user-log-' + uhUserId.slice(0, 8) + '.csv';
+            a.download = `eidovia-activity-${upUser.username}-page${upActPage}.csv`;
             a.click();
             URL.revokeObjectURL(a.href);
+        }
+
+        /* ---------- administrative actions ---------- */
+        function renderActions(u) {
+            const row = (title, text, button) => `<div class="up-action"><div><div style="font-weight:700;">${title}</div><div class="ac-sub">${text}</div></div><div>${button}</div></div>`;
+            document.getElementById('up-pane-actions').innerHTML = `<div class="card"><div class="up-body">
+                ${row('Edit profile', 'Change the name, email, learning level or language.', `<button class="btn btn-secondary" onclick="profileAction('edit')">Edit</button>`)}
+                ${row('Reset password', 'Set a new password. Open "forgot password" requests of this user are marked resolved.', `<button class="btn btn-secondary" onclick="profileAction('password')">Reset password</button>`)}
+                ${row('Give wildcards', 'Add 1-10 wildcards to the balance.', `<button class="btn btn-secondary" onclick="upSelectTab('wildcards')">Open wildcards</button>`)}
+                ${row('Make administrator', 'Gives full Admin Center access. The account moves to Administrators.', `<button class="btn btn-secondary" onclick="profileAction('promote')">Make administrator</button>`)}
+                ${row('Delete account', 'Permanently deletes the account. Its audit records are kept.', `<button class="btn btn-danger" onclick="profileAction('delete')">Delete account</button>`)}
+                <div class="ac-sub" style="margin-top:0.75rem;">Every action is saved in the audit log with your name and the time.</div>
+            </div></div>`;
+        }
+        async function profileAction(what) {
+            const u = upUser;
+            if (!u) return;
+            if (what === 'edit') return openEditUserModal({ user_id: u.user_id, username: u.username, email: u.email, language: u.language || 'en', detail_level: u.level, is_admin: false });
+            if (what === 'password') return openResetPasswordModal(u.user_id, u.username);
+            if (what === 'delete') return deleteUser(u.user_id, u.username);
+            if (what === 'promote') {
+                if (!confirm(`Make "${u.username}" an administrator?\n\nThey get full access to the Admin Center and move from Users to Administrators.`)) return;
+                try {
+                    await apiSend('PATCH', `/admin/users/${u.user_id}`, { is_admin: true });
+                    notify(`${u.username} is now an administrator.`);
+                    upUser = null;
+                    showTab('tab-admins', 'tab-admins');
+                    fetchAccounts(); fetchStats();
+                } catch(e) { notify('Could not change the role: ' + e.message, false); }
+            }
         }
 
         /* DNA QUIZ */
@@ -2049,9 +2310,9 @@
                 <button class="btn btn-secondary btn-sm" ${data.page <= 1 ? 'disabled' : ''} onclick="${go}(${data.page - 1})">‹ Prev</button>
                 <button class="btn btn-secondary btn-sm" ${data.page >= pages ? 'disabled' : ''} onclick="${go}(${data.page + 1})">Next ›</button>`;
         }
-        function qzLoadError(e) {
+        function qzLoadError(e, what = 'quiz data') {
             const missing = /\s404$/.test(e.message);
-            return `<span style="color:#b91c1c;">Couldn't load quiz data (${esc(e.message)}).</span>` + (missing
+            return `<span style="color:#b91c1c;">Couldn't load ${esc(what)} (${esc(e.message)}).</span>` + (missing
                 ? `<div style="color:var(--text-muted); font-size:0.8rem; margin-top:0.25rem;">The admin service is running old code. Run <span class="mono">docker compose restart admin</span>, then reload this page.</div>`
                 : '');
         }
@@ -2266,7 +2527,11 @@
         }
 
         /* MODALS */
-        function openCreateUserModal() { document.getElementById('create-modal').style.display = 'flex'; }
+        function openCreateUserModal(asAdmin = false) {
+            document.getElementById('create-title').textContent = asAdmin ? 'Add administrator' : 'Add user';
+            document.getElementById('new-is-admin').checked = !!asAdmin;
+            document.getElementById('create-modal').style.display = 'flex';
+        }
         function openEditUserModal(user) {
             document.getElementById('edit-user-id').value = user.user_id;
             document.getElementById('edit-username').value = user.username;
@@ -2274,6 +2539,7 @@
             document.getElementById('edit-language').value = user.language;
             document.getElementById('edit-detail').value = user.detail_level;
             document.getElementById('edit-is-admin').checked = user.is_admin;
+            editOriginal = user;
             document.getElementById('edit-modal').style.display = 'flex';
         }
         function openResetPasswordModal(userId, username) {
@@ -2321,7 +2587,8 @@
                     return;
                 }
                 closeModal('create-modal');
-                fetchUsers();
+                notify(`Created ${username}${is_admin ? ' (administrator)' : ''}.`);
+                fetchAccounts();
                 fetchStats();
             } catch(e) { alert(e.message); }
         }
@@ -2333,6 +2600,10 @@
             const language = document.getElementById('edit-language').value.trim();
             const detail_level = parseInt(document.getElementById('edit-detail').value);
             const is_admin = document.getElementById('edit-is-admin').checked;
+            if (!username || !email) { notify('Name and email are required.', false); return; }
+            if (editOriginal && editOriginal.user_id === userId && editOriginal.is_admin !== is_admin &&
+                !confirm(is_admin ? `Make "${username}" an administrator? They get full Admin Center access.`
+                                  : `Remove the administrator role from "${username}"? They become a regular app user.`)) return;
 
             try {
                 const res = await fetch(`/admin/users/${userId}`, {
@@ -2346,8 +2617,12 @@
                     return;
                 }
                 closeModal('edit-modal');
-                fetchUsers();
+                notify(`Saved the changes to ${username}.`);
+                fetchAccounts();
                 fetchStats();
+                if (upUser && upUser.user_id === userId) {
+                    if (is_admin) { upUser = null; showTab('tab-admins', 'tab-admins'); } else openUserProfile(userId, true);
+                }
             } catch(e) { alert(e.message); }
         }
 
@@ -2366,14 +2641,14 @@
                     return;
                 }
                 const r = await res.json().catch(() => ({}));
-                alert("Password successfully reset!" + (r.requests_resolved ? `\nTheir "forgot password" request is marked resolved. Tell ${r.username} the new password (e.g. by email).` : ''));
                 closeModal('reset-pwd-modal');
-                fetchTickets(); fetchStats();
+                notify("Password reset." + (r.requests_resolved ? ` The "forgot password" request is marked resolved. Tell ${r.username} the new password (e.g. by email).` : ''));
+                fetchTickets(); fetchStats(); refreshProfileIf(userId);
             } catch(e) { alert(e.message); }
         }
 
-        async function deleteUser(userId, username) {
-            if (!confirm(`Are you sure you want to delete "${username}"?`)) return;
+        async function deleteUser(userId, username, isAdmin = false) {
+            if (!confirm(`Delete the ${isAdmin ? 'administrator' : 'user'} account "${username}" permanently?\n\nThis cannot be undone. The audit records are kept.`)) return;
             try {
                 const res = await fetch(`/admin/users/${userId}`, {
                     method: 'DELETE',
@@ -2384,7 +2659,9 @@
                     alert("Error: " + (err.detail || 'Failed to delete user'));
                     return;
                 }
-                fetchUsers();
+                notify(`Deleted ${username}.`);
+                if (upUser && upUser.user_id === userId) backToUsers();
+                fetchAccounts();
                 fetchStats();
             } catch(e) { alert(e.message); }
         }

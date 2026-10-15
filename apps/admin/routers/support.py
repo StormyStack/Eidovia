@@ -47,4 +47,4 @@ async def give_requested_wildcards(
     admin: CurrentAdmin = Depends(require_admin),
 ) -> dict[str, Any]:
     """Answer a wildcard request: give the cards (to the learner's default) and mark the ticket resolved."""
-    return await SupportService.give_wildcards(ticket_id, body.amount, admin.username, body.note)
+    return await SupportService.give_wildcards(ticket_id, body.amount, admin.username, body.note, admin)
