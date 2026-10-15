@@ -38,7 +38,7 @@ The config plugin (`plugin/withEidoviaUnity.js`) links `unityLibrary` into the g
 project: settings.gradle includes, a flatDir repo for Unity's .aar files, Unity's `unity.*` Gradle
 properties, Unity's NDK and build-tools for every module, Unity's noCompress list, minSdk 29,
 the same CPU types as the Unity export (armeabi-v7a + arm64-v8a), legacy native-lib packaging and the `game_view_content_description` string. With
-`{ "cleartextHttp": true }` (set in app.json) the app may call the LAN gateway over plain http.
+Only with `{ "cleartextHttp": true }` in app.json may the app call a LAN gateway over plain http (off: the app uses the https ngrok address).
 
 The AR screen asks for the camera permission before Unity starts.
 

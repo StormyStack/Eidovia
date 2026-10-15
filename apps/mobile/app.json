@@ -28,12 +28,7 @@
       "expo-secure-store",
       "expo-font",
       "expo-asset",
-      [
-        "./modules/eidovia-unity/app.plugin.js",
-        {
-          "cleartextHttp": true
-        }
-      ]
+      "./modules/eidovia-unity/app.plugin.js"
     ]
   }
 }

@@ -15,7 +15,8 @@
  *                        legacy native-lib packaging (as Unity's own launcher), more Gradle memory
  *   strings.xml          game_view_content_description (required by Unity 6)
  *   AndroidManifest.xml  usesCleartextTraffic, only with the option { "cleartextHttp": true }
- *                        (needed while the gateway is plain http:// in the LAN)
+ *                        (off in app.json: the gateway is reached over https:// (ngrok). Turn it on
+ *                        only to test against a plain http:// LAN address)
  */
 const fs = require('fs');
 const path = require('path');
