@@ -7,9 +7,11 @@
  * It adds to the generated android/ project:
  *   settings.gradle      include ':unityLibrary' (+ its sub-libraries, e.g. xrmanifest.androidlib)
  *   build.gradle         Unity's build-tools for every module, Unity's noCompress list for the app,
+ *                        compressed .dex files (smaller APK),
  *                        flatDir repository for Unity's .aar files (ARCore etc.)
  *                        (unityLibrary keeps Unity's own NDK; React Native uses the standard NDK)
- *   gradle.properties    Unity's unity.* properties, minSdk 29, arm64 only, libc++ pickFirst,
+ *   gradle.properties    Unity's unity.* properties, minSdk 29 (Android 10), the CPU types Unity built
+ *                        (ARMv7 + ARM64), libc++ pickFirst,
  *                        legacy native-lib packaging (as Unity's own launcher), more Gradle memory
  *   strings.xml          game_view_content_description (required by Unity 6)
  *   AndroidManifest.xml  usesCleartextTraffic, only with the option { "cleartextHttp": true }
@@ -109,6 +111,8 @@ const withUnityProjectGradle = (config, props) =>
         "  plugins.withId('com.android.application') {",
         '    if (eidoviaUnityBuildTools) android.buildToolsVersion = eidoviaUnityBuildTools',
         `    android.androidResources.noCompress.addAll(${JSON.stringify(noCompress).replace(/"/g, "'")})`,
+        // compress the app's Java/Kotlin code (.dex) inside the APK: about 12 MB smaller download
+        '    android.packagingOptions.dex.useLegacyPackaging = true',
         '  }',
         '}',
         MARK_END,
@@ -145,7 +149,9 @@ const withUnityGradleProperties = (config, props) =>
     if (!('unityStreamingAssets' in unityProps)) set('unityStreamingAssets', '');
     const unityMin = parseInt(unityProps['unity.minSdkVersion'] || '29', 10);
     set('android.minSdkVersion', Math.max(29, isNaN(unityMin) ? 29 : unityMin));
-    set('reactNativeArchitectures', 'arm64-v8a');           // the Unity build is ARM64 only
+    // React Native builds the same CPU types as the Unity export (Eidovia: armeabi-v7a + arm64-v8a)
+    const abis = String(unityProps['unity.abiFilters'] || 'arm64-v8a').split(/[\s,;]+/).filter(Boolean);
+    set('reactNativeArchitectures', abis.join(','));
     set('android.packagingOptions.pickFirsts', 'lib/**/libc++_shared.so,lib/**/libfbjni.so');
     set('expo.useLegacyPackaging', 'true');                 // Unity's launcher packs native libs the same way
     set('org.gradle.jvmargs', '-Xmx4096m -XX:MaxMetaspaceSize=1024m');

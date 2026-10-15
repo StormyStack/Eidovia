@@ -17,7 +17,7 @@ The result is **one APK**: the Eidovia Expo app with the Unity game inside. The 
 launcher activity of its own (the export removes it), so there is only one icon on the phone.
 
 1. **Unity** (AR Game project, build target Android): **Eidovia → Export for Mobile App**.
-   It sets the Player Settings Unity as a Library needs (Activity entry point, IL2CPP, ARM64) and exports
+   It sets the Player Settings Unity as a Library needs (Activity entry point, IL2CPP, ARMv7 + ARM64) and exports
    `unityLibrary` to `apps/mobile/unity/builds/android`.
 2. **Unity: Eidovia → Build Mobile App (APK)**, or in `apps/mobile`:
    ```powershell
@@ -37,7 +37,7 @@ launcher activity of its own (the export removes it), so there is only one icon 
 The config plugin (`plugin/withEidoviaUnity.js`) links `unityLibrary` into the generated `android/`
 project: settings.gradle includes, a flatDir repo for Unity's .aar files, Unity's `unity.*` Gradle
 properties, Unity's NDK and build-tools for every module, Unity's noCompress list, minSdk 29,
-arm64-v8a only, legacy native-lib packaging and the `game_view_content_description` string. With
+the same CPU types as the Unity export (armeabi-v7a + arm64-v8a), legacy native-lib packaging and the `game_view_content_description` string. With
 `{ "cleartextHttp": true }` (set in app.json) the app may call the LAN gateway over plain http.
 
 The AR screen asks for the camera permission before Unity starts.

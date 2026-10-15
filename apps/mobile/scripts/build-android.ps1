@@ -6,13 +6,22 @@
 
     1. Unity (AR Game project):  Eidovia > Export for Mobile App
     2. Unity: Eidovia > Build Mobile App (APK)     -- or, in apps/mobile:
-       powershell -ExecutionPolicy Bypass -File scripts\build-android.ps1 [-Variant debug] [-Install]
+       powershell -ExecutionPolicy Bypass -File scripts\build-android.ps1 [-Variant debug] [-Install] [-Bundle]
 
   Output: apps/mobile/dist/Eidovia-<variant>.apk   Log: apps/mobile/dist/build-android.log
+  -Bundle also builds dist/Eidovia-release.aab (for Google Play).
+  -Clean  regenerates android/ from scratch. Normally it is regenerated only when app.json, package.json,
+          the Unity plugin or the Unity export changed; otherwise Gradle reuses its caches (much faster).
+
+  Release builds are signed with YOUR key when apps/mobile/credentials/keystore.properties exists
+  (storeFile, storePassword, keyAlias, keyPassword; git-ignored). Keep a backup of that folder:
+  without the same key, installed apps cannot be updated. Without it, Android's debug key is used.
 #>
 param(
   [ValidateSet('release', 'debug')][string]$Variant = 'release',
-  [switch]$Install
+  [switch]$Install,
+  [switch]$Bundle,
+  [switch]$Clean
 )
 $ErrorActionPreference = 'Stop'
 $app = Split-Path -Parent $PSScriptRoot
@@ -80,20 +89,60 @@ try {
   Say "Node: $node"
 
   Set-Location $app
-  # prebuild rewrites the "android"/"ios" scripts in package.json; keep the file exactly as it is
-  $pkg = Join-Path $app 'package.json'
-  $pkgBytes = [IO.File]::ReadAllBytes($pkg)
-  try { Run 'npx.cmd' @('expo', 'prebuild', '--platform', 'android', '--clean', '--no-install') }
-  finally { [IO.File]::WriteAllBytes($pkg, $pkgBytes) }
+  # android/ only has to be regenerated when what it is made from changed; then Gradle keeps its caches
+  $inputs = @('app.json', 'package.json', 'package-lock.json', 'modules\eidovia-unity\app.plugin.js',
+              'modules\eidovia-unity\plugin\withEidoviaUnity.js', 'unity\builds\android\EIDOVIA_EXPORT.txt') |
+            ForEach-Object { Join-Path $app $_ } | Where-Object { Test-Path $_ }
+  $hash = ($inputs | ForEach-Object { (Get-FileHash $_ -Algorithm SHA256).Hash }) -join ''
+  $stamp = Join-Path $app 'android\.eidovia-prebuild'
+  $fresh = (Test-Path (Join-Path $app 'android\gradlew.bat')) -and (Test-Path $stamp) -and ((Get-Content $stamp -Raw).Trim() -eq $hash)
+  if ($Clean -or -not $fresh) {
+    # prebuild rewrites the "android"/"ios" scripts in package.json; keep the file exactly as it is
+    $pkg = Join-Path $app 'package.json'
+    $pkgBytes = [IO.File]::ReadAllBytes($pkg)
+    try { Run 'npx.cmd' @('expo', 'prebuild', '--platform', 'android', '--clean', '--no-install') }
+    finally { [IO.File]::WriteAllBytes($pkg, $pkgBytes) }
+    Set-Content -Path $stamp -Value $hash -Encoding ascii
+  } else {
+    Say 'android/ is up to date (no prebuild): reusing the Gradle caches'
+  }
+
+  # release signing with our own key (prebuild --clean regenerates android/, so it is passed to Gradle here)
+  $signing = @()
+  $keyProps = Join-Path $app 'credentials\keystore.properties'
+  if ($Variant -eq 'release' -and (Test-Path $keyProps)) {
+    $k = @{}
+    Get-Content $keyProps | ForEach-Object { if ($_ -match '^\s*([^#=]+?)\s*=\s*(.*)$') { $k[$matches[1]] = $matches[2] } }
+    $store = Join-Path (Split-Path $keyProps) $k['storeFile']
+    if (-not (Test-Path $store)) { throw "Keystore not found: $store" }
+    $signing = @("-Pandroid.injected.signing.store.file=$store", "-Pandroid.injected.signing.store.password=$($k['storePassword'])",
+                 "-Pandroid.injected.signing.key.alias=$($k['keyAlias'])", "-Pandroid.injected.signing.key.password=$($k['keyPassword'])")
+    Say "Signing with the Eidovia release key ($store)"
+  } elseif ($Variant -eq 'release') {
+    Say 'WARNING: no credentials\keystore.properties - signing with the Android debug key (Play Protect may block the app)'
+  }
 
   Set-Location (Join-Path $app 'android')
-  $task = if ($Variant -eq 'release') { 'assembleRelease' } else { 'assembleDebug' }
-  Run '.\gradlew.bat' @($task, '--console=plain')
+  # always re-bundle the JavaScript (Gradle does not notice a changed .env such as the server URL)
+  $bundleTask = if ($Variant -eq 'release') { ':app:createBundleReleaseJsAndAssets' } else { ':app:createBundleDebugJsAndAssets' }
+  $tasks = @($bundleTask, '--rerun', $(if ($Variant -eq 'release') { 'assembleRelease' } else { 'assembleDebug' }))
+  if ($Bundle -and $Variant -eq 'release') { $tasks += 'bundleRelease' }
+  $writer.WriteLine(">> .\gradlew.bat $($tasks -join ' ') --console=plain (signing details hidden)")
+  $ErrorActionPreference = 'Continue'
+  & '.\gradlew.bat' @($tasks + $signing + @('--console=plain')) 2>&1 | ForEach-Object { Say "$_" }
+  $code = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($code -ne 0) { throw "gradlew failed with exit code $code" }
 
   $apk = Join-Path $app "android\app\build\outputs\apk\$Variant\app-$Variant.apk"
   $out = Join-Path $dist "Eidovia-$Variant.apk"
   Copy-Item $apk $out -Force
   Say ("BUILD OK: {0} ({1:N0} MB)" -f $out, ((Get-Item $out).Length / 1MB))
+  if ($Bundle -and $Variant -eq 'release') {
+    $aab = Join-Path $dist 'Eidovia-release.aab'
+    Copy-Item (Join-Path $app 'android\app\build\outputs\bundle\release\app-release.aab') $aab -Force
+    Say "Google Play bundle: $aab"
+  }
   if ($Install) { Run 'adb.exe' @('install', '-r', $out) }
 }
 catch {

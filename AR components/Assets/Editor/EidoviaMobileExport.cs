@@ -95,7 +95,8 @@ public static class EidoviaMobileExport
         // Settings that "Unity as a Library" needs
         PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.Activity;     // GameActivity cannot be embedded
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
-        PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+        // every Android 10+ phone: 64-bit (ARM64) and older 32-bit (ARMv7) ones
+        PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
         bool previousExport = EditorUserBuildSettings.exportAsGoogleAndroidProject;
         EditorUserBuildSettings.exportAsGoogleAndroidProject = true;
 

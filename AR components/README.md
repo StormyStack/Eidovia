@@ -4,7 +4,7 @@ This is the Unity project for the DNA AR game. The game runs **inside** the Eido
 It is not a separate app. Unity exports it as an Android library into `apps/mobile/unity/builds/android`,
 and the build script then puts it into the single Eidovia APK.
 
-- Unity **6000.3.25f1** with the Android module (IL2CPP, ARM64)
+- Unity **6000.3.25f1** with the Android module (IL2CPP, ARMv7 + ARM64: every Android 10+ phone)
 - AR Foundation / ARCore 6.3. AR is optional: phones without ARCore get a 3D mode.
 - Scene: `Assets/Scenes/Root_ARPersistent.unity`
 

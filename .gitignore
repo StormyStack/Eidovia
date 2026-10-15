@@ -101,3 +101,5 @@ apps/mobile/dist/
 /AR components/*.user
 *.apk
 *.aab
+# ─── App signing key (NEVER commit; keep a private backup) ─────
+apps/mobile/credentials/
