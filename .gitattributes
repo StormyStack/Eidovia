@@ -1,0 +1,2 @@
+# The released Android app is ~100 MB, above GitHub's 100 MB file limit: store it with Git LFS
+apps/mobile/dist/*.apk filter=lfs diff=lfs merge=lfs -text
