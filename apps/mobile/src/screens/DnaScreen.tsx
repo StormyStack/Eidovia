@@ -7,6 +7,7 @@ import type { ScreenProps } from '../navigation/types';
 import type { ApiError } from '../services/ApiClient';
 import { toApiError } from '../services/ApiClient';
 import { ArService, type ArProgress, type LevelStatus } from '../services/ArService';
+import { formatCountdown, formatWhen, QuizService, REQUEST_LABELS, type QuizHistory, type QuizStatus } from '../services/QuizService';
 import { layout, palette, radius, shadow, spacing, typography } from '../theme';
 import { DNA_AR } from './ARGameScreen';
 
@@ -23,19 +24,35 @@ export function formatPlayTime(seconds: number): string {
   return `${s}s`;
 }
 
-/** The DNA topic: open the AR game or the AI tutor, and see your own progress. */
+/** The DNA topic: open the AR game, the AI tutor or the quiz, and see your own progress and quiz results. */
 export function DnaScreen({ navigation }: ScreenProps<'Dna'>) {
   const insets = useSafeAreaInsets();
   const [progress, setProgress] = useState<ArProgress | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [quiz, setQuiz] = useState<{ status: QuizStatus; history: QuizHistory } | null>(null);
+  const [quizError, setQuizError] = useState<ApiError | null>(null);
   const request = useRef<AbortController | null>(null);
+
+  const loadQuiz = useCallback(async (signal: AbortSignal) => {
+    try {
+      const [status, history] = await Promise.all([QuizService.status(signal), QuizService.history(signal)]);
+      if (signal.aborted) return;
+      setQuiz({ status, history });
+      setQuizError(null);
+    } catch (e) {
+      const apiError = toApiError(e);
+      if (signal.aborted || apiError.code === 'CANCELLED' || apiError.status === 401) return;
+      setQuizError(apiError);
+    }
+  }, []);
 
   const load = useCallback(async (pull = false) => {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     if (pull) setRefreshing(true);
+    const quizDone = loadQuiz(controller.signal); // separate card: one failing does not hide the other
     try {
       const data = await ArService.getProgress(controller.signal);
       if (controller.signal.aborted) return;
@@ -46,11 +63,12 @@ export function DnaScreen({ navigation }: ScreenProps<'Dna'>) {
       if (controller.signal.aborted || apiError.code === 'CANCELLED' || apiError.status === 401) return;
       setError(apiError);
     } finally {
+      await quizDone;
       if (request.current === controller) setRefreshing(false);
     }
-  }, []);
+  }, [loadQuiz]);
 
-  // fresh numbers every time the page is shown (e.g. back from the AR game or the chat)
+  // fresh numbers every time the page is shown (e.g. back from the AR game, the chat or the quiz)
   useEffect(() => {
     void load();
     const unsubscribe = navigation.addListener('focus', () => void load());
@@ -106,6 +124,23 @@ export function DnaScreen({ navigation }: ScreenProps<'Dna'>) {
         <Ionicons name="chevron-forward" size={22} color={palette.textMuted} />
       </Pressable>
 
+      <Pressable
+        onPress={() => navigation.navigate('Quiz')}
+        accessibilityRole="button"
+        accessibilityLabel="DNA Quiz"
+        testID="dna-quiz-button"
+        style={({ pressed }) => [styles.action, styles.actionSecondary, pressed && styles.actionSecondaryPressed]}
+      >
+        <View style={[styles.actionIcon, styles.actionIconSoft]}>
+          <Ionicons name="school" size={24} color={palette.primary} />
+        </View>
+        <View style={styles.actionText}>
+          <Text style={styles.actionTitle}>DNA Quiz</Text>
+          <Text style={styles.actionCaption}>20 questions to test what you learned</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={22} color={palette.textMuted} />
+      </Pressable>
+
       <Text style={styles.sectionLabel}>Your progress</Text>
       {progress ? (
         <Dashboard progress={progress} />
@@ -119,7 +154,80 @@ export function DnaScreen({ navigation }: ScreenProps<'Dna'>) {
           <ActivityIndicator color={palette.primary} />
         </View>
       )}
+
+      <Text style={styles.sectionLabel}>Your quiz results</Text>
+      {quiz ? (
+        <QuizDashboard status={quiz.status} history={quiz.history} />
+      ) : quizError ? (
+        <Pressable style={styles.card} onPress={() => void load()} accessibilityRole="button" testID="dna-quiz-error">
+          <Text style={styles.errorText}>Couldn't load your quiz results: {quizError.message}</Text>
+          <Text style={styles.retry}>Tap to try again</Text>
+        </Pressable>
+      ) : (
+        <View style={[styles.card, styles.center]} testID="dna-quiz-loading">
+          <ActivityIndicator color={palette.primary} />
+        </View>
+      )}
     </ScrollView>
+  );
+}
+
+const pct = (v: number | null | undefined) => (v === null || v === undefined ? '--' : `${Math.round(v)}%`);
+const TYPE_LABEL = { normal: 'Normal', forced: 'Force Attempt', authorized: 'Approved by admin' } as const;
+
+/** Quiz part of the dashboard: only completed attempts count as results (abandoned/expired are shown, not scored). */
+function QuizDashboard({ status: s, history: h }: { status: QuizStatus; history: QuizHistory }) {
+  const sum = h.summary;
+  const next = s.active_attempt
+    ? 'A quiz is in progress'
+    : s.eligible
+      ? 'Available now'
+      : `${formatWhen(s.next_eligible_at)} (in ${formatCountdown(s.cooldown_remaining_s)})`;
+  const req = s.pending_request
+    ? `Waiting for an admin (sent ${formatWhen(s.pending_request.created_at)})`
+    : s.authorization
+      ? `Approved: start between ${formatWhen(s.authorization.window_start)} and ${formatWhen(s.authorization.window_end)}`
+      : s.requests[0]
+        ? `Last request: ${REQUEST_LABELS[s.requests[0].status]}`
+        : null;
+  return (
+    <View testID="dna-quiz">
+      <View style={styles.card}>
+        <Text style={styles.headline} testID="quiz-latest">
+          {sum.latest ? `Latest score ${sum.latest.score}/${sum.latest.total} (${pct(sum.latest.percent)})` : 'No quiz completed yet.'}
+        </Text>
+        <Text style={styles.quizLine} testID="quiz-completion">
+          {sum.ever_completed ? 'Completed' : 'Not completed yet'} · {sum.completed_attempts} completed of {sum.total_attempts} attempt{sum.total_attempts === 1 ? '' : 's'}
+        </Text>
+        <Text style={styles.quizLine} testID="quiz-next">Next attempt: {next}</Text>
+        {req ? <Text style={styles.quizLine} testID="quiz-request-status">Early-attempt request: {req}</Text> : null}
+      </View>
+
+      <View style={styles.grid}>
+        <Stat icon="trophy" label="Best score" value={sum.best ? `${sum.best.score}/${sum.best.total}` : '--'} testID="quiz-best" />
+        <Stat icon="stats-chart" label="Average" value={pct(sum.average_percent)} testID="quiz-average" />
+        <Stat icon="checkmark-done" label="Completed / attempts" value={`${sum.completed_attempts}/${sum.total_attempts}`} testID="quiz-attempts" />
+        <Stat icon="star" label="Wildcards" value={String(s.wildcards)} testID="quiz-wildcards" tint="#D97706" />
+        <Stat icon="flash" label={`Spent on Force (${sum.forced_attempts}×)`} value={String(sum.wildcards_spent)} testID="quiz-force-spent" tint="#D97706" />
+        <Stat icon="time" label="Completion rate" value={sum.completion_rate === null ? '--' : `${Math.round(sum.completion_rate)}%`} testID="quiz-rate" />
+      </View>
+
+      {h.attempts.length ? (
+        <View style={styles.card} testID="quiz-history">
+          {h.attempts.slice(0, 10).map((a, i) => (
+            <View key={a.attempt_id} style={[styles.historyRow, i > 0 && styles.historyBorder]} testID={`quiz-history-${a.attempt_id}`}>
+              <View style={styles.historyText}>
+                <Text style={styles.historyWhen}>{formatWhen(a.ended_at ?? a.started_at)}</Text>
+                <Text style={styles.legendText}>{TYPE_LABEL[a.attempt_type] ?? a.attempt_type}</Text>
+              </View>
+              <Text style={a.status === 'completed' ? styles.historyScore : styles.historyStatus}>
+                {a.status === 'completed' ? `${a.score}/${a.total} · ${pct(a.percent)}` : a.status.replace('_', ' ')}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -284,4 +392,11 @@ const styles = StyleSheet.create({
   statValue: { ...typography.title, marginTop: spacing.xs },
   statLabel: { ...typography.caption },
   lastPlayed: { ...typography.caption, textAlign: 'center', marginTop: spacing.xs },
+  quizLine: { ...typography.bodyMuted, marginTop: spacing.xs },
+  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, gap: spacing.sm },
+  historyBorder: { borderTopWidth: 1, borderTopColor: palette.border },
+  historyText: { flex: 1 },
+  historyWhen: { ...typography.label },
+  historyScore: { ...typography.label, color: palette.primary },
+  historyStatus: { ...typography.caption, textTransform: 'capitalize' },
 });

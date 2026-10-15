@@ -274,6 +274,8 @@
         .lv-skipped { background:#fef3c7; color:#92400e; }
         .bar { height:0.5rem; background:#f1f5f9; border-radius:999px; overflow:hidden; min-width:90px; }
         .bar > span { display:block; height:100%; background:var(--primary); }
+        .qz-lbl { font-size:0.75rem; display:flex; gap:0.3rem; align-items:center; color:var(--text-muted); }
+        .qz-pager { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; padding:0.75rem 1.25rem; font-size:0.8rem; }
         .ar-legend { font-size:0.75rem; color:var(--text-muted); display:flex; gap:1rem; align-items:center; }
         .modal.modal-wide { max-width: 820px; max-height: 85vh; overflow-y: auto; }
         .modal.modal-xl { max-width: 1100px; width: 95vw; max-height: 90vh; overflow-y: auto; }
@@ -324,6 +326,10 @@
             <li class="sidebar-item" onclick="navigate('tab-ar')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 <span>AR Game</span>
+            </li>
+            <li class="sidebar-item" onclick="navigate('tab-quiz')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                <span>DNA Quiz</span>
             </li>
             <li class="sidebar-item" onclick="navigate('tab-users')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -544,6 +550,115 @@
                     </div>
                 </div>
 
+                <!-- TAB: DNA QUIZ -->
+                <div id="tab-quiz" class="tab-panel">
+                    <div id="qz-not-ready" class="card" style="display:none; padding:1.25rem; color:var(--text-muted);">
+                        The quiz tables are created when the gateway starts. Restart the gateway, then refresh.
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="title">Completed Attempts</span>
+                            <span id="qz-completed" class="value">0</span>
+                            <span id="qz-completed-sub" class="subtitle">--</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Average Score</span>
+                            <span id="qz-avg" class="value">--</span>
+                            <span id="qz-avg-sub" class="subtitle">--</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Forced Attempts</span>
+                            <span id="qz-forced" class="value">0</span>
+                            <span id="qz-forced-sub" class="subtitle">0 wildcards spent</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="title">Pending Requests</span>
+                            <span id="qz-pending" class="value">0</span>
+                            <span id="qz-pending-sub" class="subtitle">--</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Score distribution <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">completed attempts only</span></h3>
+                            <button class="btn btn-secondary btn-sm" onclick="fetchQuizAll()">Refresh</button>
+                        </div>
+                        <div id="qz-dist" style="padding:1rem 1.25rem; display:grid; gap:0.5rem;"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Access requests</h3>
+                            <div class="filters">
+                                <select id="qzr-status" class="form-control" style="width:130px;" onchange="qzReqPage=1; fetchQuizRequests()">
+                                    <option value="pending">Pending</option>
+                                    <option value="">All</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="used">Used</option>
+                                    <option value="rejected">Rejected</option>
+                                    <option value="expired">Expired</option>
+                                </select>
+                                <input id="qzr-user" class="form-control" style="width:130px;" placeholder="User…" oninput="qzDebounce(() => { qzReqPage=1; fetchQuizRequests(); })">
+                                <label class="qz-lbl">from <input type="date" id="qzr-from" class="form-control" onchange="qzReqPage=1; fetchQuizRequests()"></label>
+                                <label class="qz-lbl">to <input type="date" id="qzr-to" class="form-control" onchange="qzReqPage=1; fetchQuizRequests()"></label>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>Learner</th><th>Requested</th><th>Reason</th><th>Status</th><th>Decision</th><th style="text-align:right;">Actions</th></tr></thead>
+                                <tbody id="qzr-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="qzr-pager" class="qz-pager"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Quiz log</h3>
+                            <div class="filters">
+                                <select id="qzl-status" class="form-control" style="width:150px;" onchange="qzLogPage=1; fetchQuizLog()">
+                                    <option value="completed">Completed results</option>
+                                    <option value="incomplete">Incomplete (abandoned / expired)</option>
+                                    <option value="in_progress">In progress</option>
+                                    <option value="all">All attempts</option>
+                                </select>
+                                <select id="qzl-type" class="form-control" style="width:120px;" onchange="qzLogPage=1; fetchQuizLog()">
+                                    <option value="">Any type</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="forced">Forced</option>
+                                    <option value="authorized">Admin-authorized</option>
+                                </select>
+                                <input id="qzl-user" class="form-control" style="width:120px;" placeholder="User…" oninput="qzDebounce(() => { qzLogPage=1; fetchQuizLog(); })">
+                                <input id="qzl-min" type="number" min="0" max="100" class="form-control" style="width:80px;" placeholder="min %" oninput="qzDebounce(() => { qzLogPage=1; fetchQuizLog(); })">
+                                <input id="qzl-max" type="number" min="0" max="100" class="form-control" style="width:80px;" placeholder="max %" oninput="qzDebounce(() => { qzLogPage=1; fetchQuizLog(); })">
+                                <label class="qz-lbl">from <input type="date" id="qzl-from" class="form-control" onchange="qzLogPage=1; fetchQuizLog()"></label>
+                                <label class="qz-lbl">to <input type="date" id="qzl-to" class="form-control" onchange="qzLogPage=1; fetchQuizLog()"></label>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>Learner</th><th>Date &amp; time</th><th>Result</th><th style="text-align:right;">Details</th></tr></thead>
+                                <tbody id="qzl-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="qzl-pager" class="qz-pager"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Performance by learner <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">from completed attempts</span></h3>
+                            <input id="qzu-search" class="form-control" style="width:200px;" placeholder="Search learner…" oninput="qzDebounce(() => { qzUserPage=1; fetchQuizUsers(); })">
+                        </div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead><tr><th>Learner</th><th>Completed</th><th>Latest</th><th>Best</th><th>Average</th><th>Trend</th><th>Completion</th><th>Last completed</th><th>Next attempt</th><th>Forced</th><th></th></tr></thead>
+                                <tbody id="qzu-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="qzu-pager" class="qz-pager"></div>
+                    </div>
+                </div>
+
                 <!-- TAB: AR GAME -->
                 <div id="tab-ar" class="tab-panel">
                     <div class="metrics-grid">
@@ -755,6 +870,7 @@
                                     <option value="chat">AI chat</option>
                                     <option value="ar">AR game</option>
                                     <option value="wildcard">Wildcards</option>
+                                    <option value="quiz">DNA quiz</option>
                                 </select>
                                 <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">Refresh</button>
                             </div>
@@ -818,6 +934,7 @@
                     <option value="chat">AI chat</option>
                     <option value="ar">AR game</option>
                     <option value="wildcard">Wildcards</option>
+                    <option value="quiz">DNA quiz</option>
                     <option value="request">Technical requests</option>
                 </select>
                 <button class="btn btn-secondary btn-sm" onclick="exportUserDetailLog()">Export CSV</button>
@@ -838,6 +955,34 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeModal('user-history-modal')">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- MODAL: QUIZ REQUEST DECISION -->
+    <div id="qz-decide-modal" class="modal-overlay">
+        <div class="modal">
+            <h3 id="qzd-title">Approve quiz access</h3>
+            <p id="qzd-sub" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;"></p>
+            <div id="qzd-approve-fields">
+                <div class="form-group"><label>Allowed from</label><input type="datetime-local" id="qzd-start" class="form-control"></div>
+                <div class="form-group"><label>Allowed until</label><input type="datetime-local" id="qzd-end" class="form-control"></div>
+                <div class="form-group"><label>Cooldown after this attempt (hours, 0-168)</label><input type="number" id="qzd-cooldown" class="form-control" min="0" max="168" value="12"></div>
+                <p style="font-size:0.78rem; color:var(--text-muted);">Approval allows ONE quiz start inside this window. After it is started (or the window ends) it cannot be used again.</p>
+            </div>
+            <div class="form-group"><label id="qzd-reason-label">Reason (optional)</label><textarea id="qzd-reason" class="form-control" rows="3" maxlength="500"></textarea></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('qz-decide-modal')">Cancel</button>
+                <button class="btn btn-primary" id="qzd-submit" onclick="submitQuizDecision()">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: QUIZ DETAIL (attempt or learner) -->
+    <div id="qz-detail-modal" class="modal-overlay">
+        <div class="modal modal-xl">
+            <h3 id="qzx-title">Quiz attempt</h3>
+            <div id="qzx-body" style="font-size:0.85rem;"></div>
+            <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('qz-detail-modal')">Close</button></div>
         </div>
     </div>
 
@@ -1096,6 +1241,7 @@
                 'tab-overview': 'Admin Console Overview',
                 'tab-tech': 'Application Technical Dashboard',
                 'tab-ar': 'AR Game Progress',
+                'tab-quiz': 'Quiz Activity & Performance',
                 'tab-users': 'User Account & Profile Management',
                 'tab-support': 'Learner Support & Assistance',
                 'tab-system': 'System Health & Maintenance',
@@ -1105,7 +1251,7 @@
         }
 
         async function loadDashboard() {
-            await Promise.all([fetchStats(), fetchHealth(), fetchUsers(), fetchTickets(), fetchAnnouncements(), fetchLogs(), fetchAr(), fetchTech()]);
+            await Promise.all([fetchStats(), fetchHealth(), fetchUsers(), fetchTickets(), fetchAnnouncements(), fetchLogs(), fetchAr(), fetchTech(), fetchQuizAll()]);
             startTechTimer();
         }
 
@@ -1310,6 +1456,12 @@
             wildcard_daily_gift:  ['Daily gift',       'wildcard','badge-resolved'],
             wildcards_granted:    ['Wildcards given',  'wildcard','badge-admin'],
             wildcard_requested:   ['Asked for wildcards','wildcard','badge-in_progress'],
+            quiz_started:         ['Started DNA quiz', 'quiz',    'badge-student'],
+            quiz_completed:       ['Finished DNA quiz','quiz',    'badge-resolved'],
+            quiz_abandoned:       ['Left DNA quiz',    'quiz',    'badge-low'],
+            quiz_access_requested:['Asked for quiz access','quiz','badge-in_progress'],
+            quiz_access_approved: ['Quiz access approved','quiz', 'badge-admin'],
+            quiz_access_rejected: ['Quiz access rejected','quiz', 'badge-open'],
         };
         /* wallet after the event: total = gift + default (the learner only sees the total) */
         function walletText(d, totalKey = 'total') {
@@ -1384,6 +1536,21 @@
                     return `Went back from <strong>${esc(lvName(d.from_level, d.from_name))}</strong> to <strong>${esc(lvName(d.to_level, d.to_name))}</strong> with the Back button.`;
                 case 'wildcard_requested':
                     return `Asked an admin for ${cards(d.amount)}: <q>${esc(d.reason)}</q><div class="log-sub">see User Support</div>`;
+                case 'quiz_started': {
+                    const how = d.attempt_type === 'forced' ? ` as a forced attempt (paid ${cards(d.wildcards_spent || 3)})`
+                        : d.attempt_type === 'authorized' ? ' with admin permission' : '';
+                    return `Started the DNA quiz${how}.` + (d.attempt_type === 'forced' ? walletText(d, 'wildcards_left') : '');
+                }
+                case 'quiz_completed':
+                    return `Finished the DNA quiz: <strong>${d.score}/${d.total}</strong> (${Math.round(d.percent)}%) in ${fmtDuration(d.duration_s)}.`;
+                case 'quiz_abandoned':
+                    return 'Left the DNA quiz without submitting (counts as an attempt, no score).';
+                case 'quiz_access_requested':
+                    return 'Asked an admin to take the DNA quiz before the 12 h cooldown ends' + (d.reason ? `: <q>${esc(d.reason)}</q>` : '.') + '<div class="log-sub">see DNA Quiz</div>';
+                case 'quiz_access_approved':
+                    return `Admin <strong>${esc(d.by)}</strong> approved early quiz access` + (d.window_end ? ` (until ${esc(tz(d.window_end))})` : '') + '.';
+                case 'quiz_access_rejected':
+                    return `Admin <strong>${esc(d.by)}</strong> rejected the quiz access request` + (d.reason ? `: <q>${esc(d.reason)}</q>` : '.');
                 case 'wildcards_granted':
                     return `Admin <strong>${esc(d.by)}</strong> gave ${cards(d.amount)} (added to default).` + walletText(d);
                 default: return esc(log.action);
@@ -1433,6 +1600,7 @@
                 fetchStats();
                 if (log.action && (log.action.startsWith('ar_') || log.action.startsWith('wildcard'))) scheduleArRefresh();
                 if (log.action === 'wildcard_requested' || log.action === 'password_reset_requested') fetchTickets();
+                if (log.action && log.action.startsWith('quiz_')) scheduleQuizRefresh();
             };
 
             ws.onclose = () => {
@@ -1853,6 +2021,248 @@
             a.download = 'eidovia-user-log-' + uhUserId.slice(0, 8) + '.csv';
             a.click();
             URL.revokeObjectURL(a.href);
+        }
+
+        /* DNA QUIZ */
+        let qzReqPage = 1, qzLogPage = 1, qzUserPage = 1, qzTimer = null, qzRefreshTimer = null;
+        let qzReqRows = [], qzLogRows = [], qzUserRows = [], qzDeciding = null;
+        const QZ_TYPES = { normal: 'Normal', forced: 'Forced (3 wildcards)', authorized: 'Admin-authorized' };
+        const QZ_STATUS_BADGE = { pending: 'badge-in_progress', approved: 'badge-resolved', used: 'badge-admin', rejected: 'badge-open', expired: 'badge-low',
+                                  completed: 'badge-resolved', abandoned: 'badge-low', in_progress: 'badge-in_progress' };
+        function qzDebounce(fn) { clearTimeout(qzTimer); qzTimer = setTimeout(fn, 400); }
+        function tz(iso) {
+            if (!iso) return '--';
+            return new Date(iso).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+        }
+        function qzResult(a) { return a.score === null || a.score === undefined ? '--' : `<strong>${a.score}/${a.total}</strong> · ${Math.round(a.percent)}%`; }
+        function qzPct(v) { return v === null || v === undefined ? '--' : `${Math.round(v)}%`; }
+        function qzDay(id, end) {          // date inputs are local days → ISO instants
+            const v = document.getElementById(id).value;
+            if (!v) return '';
+            const d = new Date(v + 'T00:00:00');
+            if (end) d.setDate(d.getDate() + 1);
+            return d.toISOString();
+        }
+        function qzPager(id, data, go) {
+            const pages = Math.max(1, Math.ceil(data.total / data.page_size));
+            document.getElementById(id).innerHTML = `<span>${data.total} total · page ${data.page} of ${pages}</span>
+                <button class="btn btn-secondary btn-sm" ${data.page <= 1 ? 'disabled' : ''} onclick="${go}(${data.page - 1})">‹ Prev</button>
+                <button class="btn btn-secondary btn-sm" ${data.page >= pages ? 'disabled' : ''} onclick="${go}(${data.page + 1})">Next ›</button>`;
+        }
+        function qzLoadError(e) {
+            const missing = /\s404$/.test(e.message);
+            return `<span style="color:#b91c1c;">Couldn't load quiz data (${esc(e.message)}).</span>` + (missing
+                ? `<div style="color:var(--text-muted); font-size:0.8rem; margin-top:0.25rem;">The admin service is running old code. Run <span class="mono">docker compose restart admin</span>, then reload this page.</div>`
+                : '');
+        }
+        function scheduleQuizRefresh() { clearTimeout(qzRefreshTimer); qzRefreshTimer = setTimeout(fetchQuizAll, 1500); }
+        async function fetchQuizAll() { await Promise.all([fetchQuizSummary(), fetchQuizRequests(), fetchQuizLog(), fetchQuizUsers()]); }
+
+        async function fetchQuizSummary() {
+            try {
+                const s = await arGet('/admin/quiz/summary');
+                document.getElementById('qz-not-ready').style.display = s.ready ? 'none' : 'block';
+                if (!s.ready) return;
+                document.getElementById('qz-completed').textContent = s.completed_attempts;
+                document.getElementById('qz-completed-sub').textContent = `${s.completers} learners` + (s.participation_percent !== null ? ` (${s.participation_percent}% of learners)` : '') +
+                    ` · completion rate ${s.completion_rate ?? '--'}%`;
+                document.getElementById('qz-avg').textContent = s.avg_percent === null ? '--' : Math.round(s.avg_percent) + '%';
+                document.getElementById('qz-avg-sub').textContent = `median ${qzPct(s.median_percent)} · avg time ${fmtDuration(s.avg_duration_s)} · ${s.incomplete_attempts} incomplete`;
+                document.getElementById('qz-forced').textContent = s.forced_attempts;
+                document.getElementById('qz-forced-sub').textContent = `${s.wildcards_spent} wildcards spent · ${s.authorized_attempts} admin-authorized`;
+                document.getElementById('qz-pending').textContent = s.requests.pending;
+                document.getElementById('qz-pending-sub').textContent = `${s.requests.approved} approved · ${s.requests.used} used · ${s.requests.rejected} rejected · ${s.requests.expired} expired`;
+                const max = Math.max(1, ...s.distribution.map(b => b.count));
+                document.getElementById('qz-dist').innerHTML = s.distribution.map(b => `
+                    <div style="display:flex; align-items:center; gap:0.75rem; font-size:0.85rem;">
+                        <span style="width:70px;">${b.label}</span>
+                        <div class="bar" style="flex:1;"><span style="width:${Math.round(100 * b.count / max)}%"></span></div>
+                        <span style="width:40px; text-align:right;">${b.count}</span>
+                    </div>`).join('');
+            } catch(e) {
+                console.error(e);
+                const nr = document.getElementById('qz-not-ready');
+                nr.style.display = 'block';
+                nr.innerHTML = qzLoadError(e);
+            }
+        }
+
+        async function fetchQuizRequests(page) {
+            if (page) qzReqPage = page;
+            try {
+                const q = new URLSearchParams({ status: document.getElementById('qzr-status').value, user: document.getElementById('qzr-user').value.trim(),
+                    date_from: qzDay('qzr-from'), date_to: qzDay('qzr-to', true), page: qzReqPage, page_size: 15 });
+                const data = await arGet('/admin/quiz/requests?' + q);
+                qzReqRows = data.items;
+                document.getElementById('qzr-body').innerHTML = data.items.map((r, i) => `<tr>
+                    <td style="font-weight:600;">${esc(r.username)}<div><a href="#" style="font-size:0.75rem;" onclick="openQuizUser('${esc(r.user_id)}'); return false;">quiz history</a></div></td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${tz(r.created_at)}</td>
+                    <td style="font-size:0.85rem; max-width:260px;">${esc(r.reason || '—')}</td>
+                    <td><span class="badge ${QZ_STATUS_BADGE[r.status] || 'badge-low'}">${esc(r.status)}</span></td>
+                    <td style="font-size:0.78rem; color:var(--text-muted);">${r.decided_at ? `${esc(r.decided_by)} · ${tz(r.decided_at)}` : '—'}
+                        ${r.window_start ? `<div>window ${tz(r.window_start)} → ${tz(r.window_end)} · cooldown ${r.cooldown_hours} h</div>` : ''}
+                        ${r.decision_reason ? `<div>“${esc(r.decision_reason)}”</div>` : ''}
+                        ${r.used_at ? `<div>used ${tz(r.used_at)}</div>` : ''}</td>
+                    <td style="text-align:right; white-space:nowrap;">${r.status === 'pending'
+                        ? `<button class="btn btn-primary btn-sm" onclick="openQuizDecision(${i}, true)">Approve</button>
+                           <button class="btn btn-danger btn-sm" onclick="openQuizDecision(${i}, false)">Reject</button>` : ''}</td>
+                </tr>`).join('') || '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No requests.</td></tr>';
+                qzPager('qzr-pager', data, 'fetchQuizRequests');
+            } catch(e) {
+                console.error(e);
+                document.getElementById('qzr-body').innerHTML = `<tr><td colspan="6" style="padding:1.25rem;">${qzLoadError(e)}</td></tr>`;
+            }
+        }
+        function localInput(d) { const p = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+        function openQuizDecision(i, approve) {
+            const r = qzReqRows[i];
+            if (!r || r.status !== 'pending') return;
+            qzDeciding = { request: r, approve };
+            document.getElementById('qzd-title').textContent = approve ? 'Approve quiz access' : 'Reject quiz access';
+            document.getElementById('qzd-sub').textContent = `${r.username} asked ${tz(r.created_at)}` + (r.reason ? ` · “${r.reason}”` : '');
+            document.getElementById('qzd-approve-fields').style.display = approve ? 'block' : 'none';
+            document.getElementById('qzd-reason-label').textContent = approve ? 'Reason (optional, shown to the learner)' : 'Reason (required, shown to the learner)';
+            document.getElementById('qzd-reason').value = '';
+            const now = new Date();
+            document.getElementById('qzd-start').value = localInput(now);
+            document.getElementById('qzd-end').value = localInput(new Date(now.getTime() + 24 * 3600 * 1000));
+            document.getElementById('qzd-cooldown').value = 12;
+            const btn = document.getElementById('qzd-submit');
+            btn.textContent = approve ? 'Approve' : 'Reject';
+            btn.className = 'btn ' + (approve ? 'btn-primary' : 'btn-danger');
+            document.getElementById('qz-decide-modal').style.display = 'flex';
+        }
+        async function submitQuizDecision() {
+            if (!qzDeciding) return;
+            const { request, approve } = qzDeciding;
+            const reason = document.getElementById('qzd-reason').value.trim();
+            let body;
+            if (approve) {
+                const s = document.getElementById('qzd-start').value, e = document.getElementById('qzd-end').value;
+                body = { window_start: s ? new Date(s).toISOString() : null, window_end: e ? new Date(e).toISOString() : null,
+                         cooldown_hours: parseInt(document.getElementById('qzd-cooldown').value, 10), reason: reason || null };
+            } else {
+                if (reason.length < 3) { alert('Write a reason for rejecting (at least 3 characters).'); return; }
+                body = { reason };
+            }
+            const btn = document.getElementById('qzd-submit');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/admin/quiz/requests/${request.request_id}/${approve ? 'approve' : 'reject'}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwtToken}, body: JSON.stringify(body) });
+                const r = await res.json().catch(() => ({}));
+                if (!res.ok) { alert('Could not save: ' + (typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail || `HTTP ${res.status}`))); return; }
+                closeModal('qz-decide-modal');
+                fetchQuizAll();
+            } catch(e) { alert(e.message); }
+            finally { btn.disabled = false; }
+        }
+
+        async function fetchQuizLog(page) {
+            if (page) qzLogPage = page;
+            try {
+                const q = new URLSearchParams({ status: document.getElementById('qzl-status').value, attempt_type: document.getElementById('qzl-type').value,
+                    user: document.getElementById('qzl-user').value.trim(), date_from: qzDay('qzl-from'), date_to: qzDay('qzl-to', true),
+                    page: qzLogPage, page_size: 20 });
+                const mn = document.getElementById('qzl-min').value, mx = document.getElementById('qzl-max').value;
+                if (mn !== '') q.set('min_percent', mn);
+                if (mx !== '') q.set('max_percent', mx);
+                const data = await arGet('/admin/quiz/attempts?' + q);
+                qzLogRows = data.items;
+                document.getElementById('qzl-body').innerHTML = data.items.map((a, i) => `<tr class="req-row" onclick="openQuizAttempt('${a.attempt_id}')">
+                    <td style="font-weight:600;">${esc(a.username)}</td>
+                    <td style="white-space:nowrap;">${tz(a.ended_at || a.started_at)}</td>
+                    <td>${a.status === 'completed' ? qzResult(a) : `<span class="badge ${QZ_STATUS_BADGE[a.status]}">${esc(a.status.replace('_', ' '))}</span>`}</td>
+                    <td style="text-align:right;"><button class="btn btn-secondary btn-sm">Open</button></td>
+                </tr>`).join('') || '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No attempts match.</td></tr>';
+                qzPager('qzl-pager', data, 'fetchQuizLog');
+            } catch(e) {
+                console.error(e);
+                document.getElementById('qzl-body').innerHTML = `<tr><td colspan="4" style="padding:1.25rem;">${qzLoadError(e)}</td></tr>`;
+            }
+        }
+        async function openQuizAttempt(id) {
+            document.getElementById('qzx-title').textContent = 'Quiz attempt';
+            document.getElementById('qzx-body').innerHTML = 'Loading…';
+            document.getElementById('qz-detail-modal').style.display = 'flex';
+            try {
+                const a = await arGet('/admin/quiz/attempts/' + encodeURIComponent(id));
+                document.getElementById('qzx-title').textContent = `Quiz attempt · ${a.username}`;
+                const auth = a.authorization;
+                document.getElementById('qzx-body').innerHTML = `
+                    <div class="hist-grid">
+                        ${hist('Result', a.status === 'completed' ? `${a.score}/${a.total} (${Math.round(a.percent)}%)` : esc(a.status))}
+                        ${hist('Attempt type', esc(QZ_TYPES[a.attempt_type] || a.attempt_type), a.wildcards_spent ? `${a.wildcards_spent} wildcards spent` : '')}
+                        ${hist('Started', tz(a.started_at))}
+                        ${hist('Ended', tz(a.ended_at), a.duration_s !== null ? 'took ' + fmtDuration(a.duration_s) : '')}
+                        ${hist('Quiz version', a.quiz_version, `cooldown after: ${a.cooldown_hours} h`)}
+                        ${hist('Attempt id', `<span class="mono" style="font-size:0.7rem;">${esc(a.attempt_id)}</span>`)}
+                    </div>
+                    ${auth ? `<p style="margin-bottom:0.75rem;">Authorized by <strong>${esc(auth.decided_by)}</strong> ${tz(auth.decided_at)} · window ${tz(auth.window_start)} → ${tz(auth.window_end)}${auth.decision_reason ? ` · “${esc(auth.decision_reason)}”` : ''}</p>` : ''}
+                    ${a.status === 'completed' ? `<div class="table-responsive"><table><thead><tr><th>#</th><th>Level</th><th>Question</th><th>Answer</th><th></th></tr></thead><tbody>
+                        ${a.questions.map(q => `<tr><td>${q.id}</td><td>${esc(q.level)}</td><td>${esc(q.text)}</td><td>${esc(q.answer || '—')}</td>
+                            <td>${q.correct ? '<span class="badge badge-resolved">correct</span>' : '<span class="badge badge-open">wrong</span>'}</td></tr>`).join('')}
+                    </tbody></table></div>` : '<p style="color:var(--text-muted);">No result: this attempt was not completed.</p>'}`;
+            } catch(e) { document.getElementById('qzx-body').innerHTML = `<span style="color:#b91c1c;">${esc(e.message)}</span>`; }
+        }
+
+        async function fetchQuizUsers(page) {
+            if (page) qzUserPage = page;
+            try {
+                const q = new URLSearchParams({ search: document.getElementById('qzu-search').value.trim(), page: qzUserPage, page_size: 20 });
+                const data = await arGet('/admin/quiz/users?' + q);
+                qzUserRows = data.items;
+                const TREND = { improving: '▲ improving', declining: '▼ declining', steady: '■ steady' };
+                document.getElementById('qzu-body').innerHTML = data.items.map(u => `<tr>
+                    <td style="font-weight:600;">${esc(u.username)}</td>
+                    <td>${u.completed}<span style="color:var(--text-muted); font-size:0.75rem;"> / ${u.attempts}</span></td>
+                    <td>${u.latest_score !== null ? `${u.latest_score}/${u.latest_total}` : '--'}</td>
+                    <td>${qzPct(u.best_percent)}</td>
+                    <td>${qzPct(u.avg_percent)}</td>
+                    <td style="font-size:0.8rem;">${u.trend ? TREND[u.trend] : '--'}</td>
+                    <td>${u.completion_rate !== null ? u.completion_rate + '%' : '--'}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${tz(u.last_completed_at)}</td>
+                    <td style="white-space:nowrap; font-size:0.8rem;">${u.next_eligible_at ? tz(u.next_eligible_at) + `<div style="color:var(--text-muted);">in ${fmtDuration(u.cooldown_remaining_s)}</div>` : '<span class="badge badge-resolved">now</span>'}</td>
+                    <td style="font-size:0.8rem;">${u.forced_attempts}${u.wildcards_spent ? ` · ${u.wildcards_spent} wc` : ''}</td>
+                    <td style="text-align:right;"><button class="btn btn-secondary btn-sm" onclick="openQuizUser('${esc(u.user_id)}')">Open</button></td>
+                </tr>`).join('') || '<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No quiz attempts yet.</td></tr>';
+                qzPager('qzu-pager', data, 'fetchQuizUsers');
+            } catch(e) {
+                console.error(e);
+                document.getElementById('qzu-body').innerHTML = `<tr><td colspan="11" style="padding:1.25rem;">${qzLoadError(e)}</td></tr>`;
+            }
+        }
+        async function openQuizUser(userId) {
+            document.getElementById('qzx-title').textContent = 'Learner quiz history';
+            document.getElementById('qzx-body').innerHTML = 'Loading…';
+            document.getElementById('qz-detail-modal').style.display = 'flex';
+            try {
+                const d = await arGet('/admin/quiz/users/' + encodeURIComponent(userId));
+                const s = d.summary;
+                document.getElementById('qzx-title').textContent = 'Learner quiz history' + (s ? ' · ' + s.username : '');
+                document.getElementById('qzx-body').innerHTML = (s ? `<div class="hist-grid">
+                        ${hist('Completed', `${s.completed} / ${s.attempts}`, `completion rate ${s.completion_rate ?? '--'}%`)}
+                        ${hist('Latest', s.latest_score !== null ? `${s.latest_score}/${s.latest_total}` : '--', qzPct(s.latest_percent))}
+                        ${hist('Best', qzPct(s.best_percent))}
+                        ${hist('Average', qzPct(s.avg_percent), `last 3: ${qzPct(s.recent_avg_percent)} · trend ${s.trend || '--'}`)}
+                        ${hist('Next attempt', s.next_eligible_at ? tz(s.next_eligible_at) : 'now', s.next_eligible_at ? 'in ' + fmtDuration(s.cooldown_remaining_s) : 'no cooldown')}
+                        ${hist('Forced', s.forced_attempts, `${s.wildcards_spent} wildcards · ${s.authorized_attempts} admin-authorized`)}
+                        ${hist('Ranking score v1', s.ranking_score_v1 ?? '--', 'internal, not shown to learners')}
+                    </div>` : '<p>No quiz attempts yet.</p>') + `
+                    <h4 style="margin:0.5rem 0;">Attempts</h4>
+                    <div class="table-responsive"><table><thead><tr><th>Date &amp; time</th><th>Result</th><th>Type</th><th>Status</th></tr></thead><tbody>
+                    ${d.attempts.map(a => `<tr class="req-row" onclick="openQuizAttempt('${a.attempt_id}')"><td>${tz(a.ended_at || a.started_at)}</td>
+                        <td>${a.status === 'completed' ? qzResult(a) : '--'}</td><td>${esc(QZ_TYPES[a.attempt_type] || a.attempt_type)}</td>
+                        <td><span class="badge ${QZ_STATUS_BADGE[a.status]}">${esc(a.status.replace('_', ' '))}</span></td></tr>`).join('') || '<tr><td colspan="4">None.</td></tr>'}
+                    </tbody></table></div>
+                    <h4 style="margin:0.75rem 0 0.5rem;">Access requests</h4>
+                    <div class="table-responsive"><table><thead><tr><th>Requested</th><th>Status</th><th>Decision</th></tr></thead><tbody>
+                    ${d.requests.map(r => `<tr><td>${tz(r.created_at)}<div style="font-size:0.75rem; color:var(--text-muted);">${esc(r.reason || '')}</div></td>
+                        <td><span class="badge ${QZ_STATUS_BADGE[r.status]}">${esc(r.status)}</span></td>
+                        <td style="font-size:0.78rem;">${r.decided_by ? `${esc(r.decided_by)} · ${tz(r.decided_at)}` : '—'}${r.decision_reason ? ` · “${esc(r.decision_reason)}”` : ''}</td></tr>`).join('') || '<tr><td colspan="3">None.</td></tr>'}
+                    </tbody></table></div>`;
+            } catch(e) { document.getElementById('qzx-body').innerHTML = `<span style="color:#b91c1c;">${esc(e.message)}</span>`; }
         }
 
         /* MODALS */

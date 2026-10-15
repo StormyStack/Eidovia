@@ -36,6 +36,7 @@ UPSTREAMS = [
     ("/api/users", "gateway → PostgreSQL (users)"),
     ("/api/modules", "gateway → PostgreSQL (modules)"),
     ("/api/ar/progress", "gateway → PostgreSQL (audit_logs, wildcard_wallets)"),
+    ("/api/quiz", "gateway → PostgreSQL (quiz_attempts, quiz_versions)"),
     ("/api/wildcards/request", "gateway → PostgreSQL (support_tickets)"),
     ("/api/wildcards", "gateway → PostgreSQL (wildcard_wallets)"),
     ("/api/events", "gateway → Redis queue → logger → PostgreSQL (audit_logs)"),

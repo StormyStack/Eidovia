@@ -16,8 +16,10 @@ export type RootStackParamList = {
   // signed in
   /** first screen after login: the topics (DNA first) */
   Topics: undefined;
-  /** the DNA topic: AR game, AI tutor and the learner's progress */
+  /** the DNA topic: AR game, AI tutor, quiz and the learner's progress + quiz results */
   Dna: undefined;
+  /** the DNA multiple-choice quiz (start / force / approved attempt, answer, result, early-attempt requests) */
+  Quiz: undefined;
   /** name, email, level, age, gender, change password, wildcards (+ request), log out */
   Profile: undefined;
   /** config = GET /api/modules/{id}/config response (PDF contract); title for the header. */

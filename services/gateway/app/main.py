@@ -18,7 +18,7 @@ from app.config import get_settings
 from app.db import db
 from app.errors import register_error_handlers
 from app import request_log
-from app.routers import ar, auth, chat, modules, users, wildcards
+from app.routers import ar, auth, chat, modules, quiz, users, wildcards
 from app.schemas import HealthResponse
 
 logging.basicConfig(
@@ -45,12 +45,23 @@ async def _warn_if_not_migrated() -> None:
         logger.warning(f"Could not check migrations: {type(e).__name__}")
 
 
+async def _prepare_quiz() -> None:
+    """Quiz tables (migration 010) and quiz version 1; also done lazily on the first quiz request."""
+    from app import quiz_service
+    try:
+        async with db.get_session() as session:
+            await quiz_service.ensure_schema(session)
+    except Exception as e:
+        logger.warning(f"Quiz tables not ready yet: {type(e).__name__}: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_settings()  # fail fast on missing/invalid JWT_SECRET or DB_PASSWORD
     logger.info("Eidovia Gateway starting")
     await db.connect()
     await _warn_if_not_migrated()
+    await _prepare_quiz()
     yield
     await db.disconnect()
     logger.info("Gateway stopped")
@@ -75,6 +86,7 @@ app.include_router(modules.router)
 app.include_router(chat.router)
 app.include_router(ar.router)
 app.include_router(wildcards.router)
+app.include_router(quiz.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])

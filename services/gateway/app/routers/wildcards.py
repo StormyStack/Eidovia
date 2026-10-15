@@ -14,6 +14,7 @@ POST /api/wildcards/earn       earn a card: {feature, reason, ...}          e.g.
 POST /api/wildcards/request    ask an admin for wildcards with a reason (a support ticket; once every 3 days)
 GET  /api/wildcards/requests   the learner's recent requests and the admin's answers
 
+Every change is also a row in wildcard_ledger (delta, reason, wallet after; idempotency key where it matters).
 Audit events (admin panel): wildcard_used, wildcard_earned, wildcard_daily_gift, wildcard_requested
 (the admin panel writes wildcards_granted). Each has the wallet after the change: gift, default, total.
 """
@@ -68,9 +69,22 @@ SETUP = [
          created_at TIMESTAMPTZ DEFAULT now(),
          updated_at TIMESTAMPTZ DEFAULT now()
        )""",
-    "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'general'",
-    "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS requested_amount INT",
-    "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS granted_amount INT",
+    "ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'general'",
+    "ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS requested_amount INT",
+    "ALTER TABLE IF EXISTS support_tickets ADD COLUMN IF NOT EXISTS granted_amount INT",
+    # auditable ledger of every wildcard movement (migration 010)
+    """CREATE TABLE IF NOT EXISTS wildcard_ledger (
+         entry_id BIGSERIAL PRIMARY KEY,
+         user_id TEXT NOT NULL,
+         delta INT NOT NULL,
+         reason TEXT NOT NULL,
+         ref TEXT,
+         idempotency_key TEXT UNIQUE,
+         gift_after INT,
+         default_after INT,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       )""",
+    "CREATE INDEX IF NOT EXISTS idx_wildcard_ledger_user ON wildcard_ledger(user_id, created_at DESC)",
 ]
 _ready = False
 
@@ -111,8 +125,37 @@ async def wallet_for(session, user_id: str) -> tuple[dict, int]:
             "UPDATE wildcard_wallets SET gift_cards = :g, last_gift_at = :t, unseen = unseen + :a, updated_at = now() WHERE user_id = :u"
         ), {"g": new_gift, "t": last, "a": added, "u": user_id})
         wallet.update(gift=new_gift, unseen=w.unseen + added)
+        if added:
+            await ledger(session, user_id, added, "daily_gift", wallet)
     wallet["total"] = wallet["gift"] + wallet["default"]
     return wallet, added
+
+
+async def ledger(session, user_id: str, delta: int, reason: str, wallet: dict,
+                 ref: Optional[str] = None, key: Optional[str] = None) -> None:
+    """One row in wildcard_ledger (same transaction as the wallet change). key = idempotency key (unique)."""
+    await session.execute(text("""
+        INSERT INTO wildcard_ledger (user_id, delta, reason, ref, idempotency_key, gift_after, default_after)
+        VALUES (CAST(:u AS TEXT), CAST(:d AS INT), CAST(:r AS TEXT), CAST(:ref AS TEXT), CAST(:k AS TEXT),
+                CAST(:g AS INT), CAST(:df AS INT))
+    """), {"u": user_id, "d": delta, "r": reason, "ref": ref, "k": key, "g": wallet["gift"], "df": wallet["default"]})
+
+
+async def deduct(session, user_id: str, wallet: dict, cost: int) -> tuple[int, int]:
+    """
+    Take `cost` cards from a wallet locked by wallet_for() (gift cards first). The caller checked the total.
+    Updates `wallet` in place and returns (from_gift, from_default).
+    """
+    from_gift = min(wallet["gift"], cost)
+    from_default = cost - from_gift
+    await session.execute(text(
+        "UPDATE wildcard_wallets SET gift_cards = gift_cards - CAST(:g AS INT), "
+        "default_cards = default_cards - CAST(:d AS INT), updated_at = now() WHERE user_id = :u"
+    ), {"g": from_gift, "d": from_default, "u": user_id})
+    wallet["gift"] -= from_gift
+    wallet["default"] -= from_default
+    wallet["total"] -= cost
+    return from_gift, from_default
 
 
 async def log_daily_gift(user: CurrentUser, wallet: dict, added: int) -> None:
@@ -194,16 +237,10 @@ async def spend_wildcards(body: SpendRequest, current_user: CurrentUser = Depend
     async with db.get_session() as session:
         wallet, daily = await wallet_for(session, current_user.user_id)
         ok = wallet["total"] >= cost
-        from_gift = min(wallet["gift"], cost) if ok else 0
-        from_default = cost - from_gift if ok else 0
+        from_gift = from_default = 0
         if ok:
-            await session.execute(text(
-                "UPDATE wildcard_wallets SET gift_cards = gift_cards - :g, default_cards = default_cards - :d, updated_at = now() "
-                "WHERE user_id = :u"
-            ), {"g": from_gift, "d": from_default, "u": current_user.user_id})
-            wallet["gift"] -= from_gift
-            wallet["default"] -= from_default
-            wallet["total"] -= cost
+            from_gift, from_default = await deduct(session, current_user.user_id, wallet, cost)
+            await ledger(session, current_user.user_id, -cost, f"{body.feature}_{body.action}", wallet, ref=body.session_id)
     await log_daily_gift(current_user, wallet, daily)
     details: dict[str, Any] = {
         "feature": body.feature, "action": body.action, "mode": body.action, "session_id": body.session_id,
@@ -239,6 +276,7 @@ async def earn_wildcard(body: EarnRequest, current_user: CurrentUser = Depends(g
             ), {"u": current_user.user_id})
             wallet["default"] += 1
             wallet["total"] += 1
+            await ledger(session, current_user.user_id, 1, f"{body.feature}_{body.reason}", wallet, ref=body.session_id)
     await log_daily_gift(current_user, wallet, daily)
     if earned:
         details: dict[str, Any] = {"feature": body.feature, "reason": body.reason, "session_id": body.session_id,

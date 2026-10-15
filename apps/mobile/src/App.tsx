@@ -2,7 +2,7 @@
  * Root navigation (PDF §1: "App.tsx — Root navigation (React Navigation stack)").
  *
  * 1. While authStore.restoreSession() runs → SplashScreen.
- * 2. Signed out → Login, SignUp.   Signed in → Topics → Dna (AR game, AI tutor, progress) → ARGame / Chat;
+ * 2. Signed out → Login, SignUp.   Signed in → Topics → Dna (AR game, AI tutor, quiz, progress) → ARGame / Chat / Quiz;
  *    Topics → Profile (details, password, wildcards, log out).
  * Signing in/out swaps the screen set; React Navigation moves to the right screen
  * automatically (never navigate to Topics manually after login).
@@ -20,6 +20,7 @@ import { ChatScreen } from './screens/ChatScreen';
 import { DnaScreen } from './screens/DnaScreen';
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { QuizScreen } from './screens/QuizScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { SignUpScreen } from './screens/SignUpScreen';
 import { SplashScreen } from './screens/SplashScreen';
@@ -78,6 +79,7 @@ export default function App() {
                 <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
                 <Stack.Screen name="ARGame" component={ARGameScreen} options={({ route }) => ({ title: route.params.title })} />
                 <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'AI Tutor' }} />
+                <Stack.Screen name="Quiz" component={QuizScreen} options={{ title: 'DNA Quiz' }} />
               </Stack.Group>
             ) : (
               <Stack.Group screenOptions={{ headerShown: false }}>
